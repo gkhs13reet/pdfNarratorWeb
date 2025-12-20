@@ -1,8 +1,9 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>PDF Narrator</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -36,40 +37,101 @@
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
-        body { font-family: 'Inter', sans-serif; }
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+
         .glass {
-            background: rgba(17, 24, 39, 0.7);
-            backdrop-filter: blur(10px);
+            background: rgba(17, 24, 39, 0.85);
+            /* Slightly more opaque for mobile contrast */
+            backdrop-filter: blur(12px);
             border: 1px solid rgba(255, 255, 255, 0.1);
         }
+
         /* Custom Scrollbar */
-        ::-webkit-scrollbar { width: 8px; }
-        ::-webkit-scrollbar-track { background: #1f2937; }
-        ::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #6b7280; }
-        
+        ::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        /* Thinner for mobile */
+        ::-webkit-scrollbar-track {
+            background: #1f2937;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #4b5563;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #6b7280;
+        }
+
         .active-chapter {
             background: rgba(14, 165, 233, 0.15);
             border-left: 3px solid #0ea5e9;
         }
+
+        /* Mobile Adjustments */
+        @media (max-width: 768px) {
+            .mobile-sidebar {
+                position: absolute;
+                top: 0;
+                bottom: 0;
+                left: 0;
+                z-index: 40;
+                width: 85%;
+                max-width: 320px;
+                transform: translateX(-100%);
+                transition: transform 0.3s ease-in-out;
+            }
+
+            .mobile-sidebar.open {
+                transform: translateX(0);
+            }
+
+            .backdrop {
+                position: absolute;
+                inset: 0;
+                background: rgba(0, 0, 0, 0.6);
+                z-index: 30;
+                opacity: 0;
+                pointer-events: none;
+                transition: opacity 0.3s;
+            }
+
+            .backdrop.show {
+                opacity: 1;
+                pointer-events: auto;
+            }
+        }
     </style>
 </head>
-<body class="bg-gray-900 text-gray-100 h-screen flex flex-col overflow-hidden">
+
+<body class="bg-gray-900 text-gray-100 h-[100dvh] flex flex-col overflow-hidden">
 
     <!-- Header -->
-    <header class="h-16 glass z-20 flex items-center justify-between px-6 shrink-0">
+    <header class="h-14 md:h-16 glass z-20 flex items-center justify-between px-4 md:px-6 shrink-0 relative">
         <div class="flex items-center gap-3">
-            <div class="bg-brand-500/20 p-2 rounded-lg text-brand-500">
-                <i data-lucide="book-open" class="w-6 h-6"></i>
+            <!-- Mobile Menu Button -->
+            <button id="btn-menu" class="md:hidden p-2 -ml-2 text-gray-300 hover:text-white">
+                <i data-lucide="menu" class="w-6 h-6"></i>
+            </button>
+
+            <div class="bg-brand-500/20 p-1.5 md:p-2 rounded-lg text-brand-500">
+                <i data-lucide="book-open" class="w-5 h-5 md:w-6 md:h-6"></i>
             </div>
-            <h1 class="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-brand-500 to-purple-400">
+            <h1
+                class="text-lg md:text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-brand-500 to-purple-400 truncate max-w-[150px] md:max-w-none">
                 PDF Narrator
             </h1>
         </div>
         <div class="flex items-center gap-4">
-            <label class="cursor-pointer bg-brand-600 hover:bg-brand-500 text-white px-4 py-2 rounded-lg transition-all flex items-center gap-2 text-sm font-medium shadow-lg shadow-brand-900/50">
+            <label
+                class="cursor-pointer bg-brand-600 hover:bg-brand-500 text-white px-3 py-1.5 md:px-4 md:py-2 rounded-lg transition-all flex items-center gap-2 text-sm font-medium shadow-lg shadow-brand-900/50">
                 <i data-lucide="upload" class="w-4 h-4"></i>
-                <span>Upload PDF</span>
+                <span class="hidden md:inline">Upload PDF</span>
+                <span class="md:hidden">Upload</span>
                 <input type="file" id="file-upload" class="hidden" accept="application/pdf">
             </label>
         </div>
@@ -77,14 +139,23 @@
 
     <!-- Main Content -->
     <main class="flex-1 flex overflow-hidden relative">
-        
+
+        <!-- Backdrop -->
+        <div id="sidebar-backdrop" class="backdrop md:hidden"></div>
+
         <!-- Sidebar - Chapters -->
-        <aside class="w-80 bg-gray-900/50 border-r border-gray-800 flex flex-col shrink-0 transition-transform duration-300 transform" id="sidebar">
-            <div class="p-4 border-b border-gray-800 flex justify-between items-center">
+        <aside
+            class="w-80 bg-gray-900 border-r border-gray-800 flex flex-col shrink-0 md:relative mobile-sidebar shadow-2xl md:shadow-none h-full"
+            id="sidebar">
+            <div class="p-4 border-b border-gray-800 flex justify-between items-center bg-gray-900/95 backdrop-blur">
                 <h2 class="font-semibold text-gray-400 text-sm uppercase tracking-wider">Chapters</h2>
                 <span id="chapter-count" class="text-xs text-gray-500 bg-gray-800 px-2 py-1 rounded-full">0</span>
+                <!-- Close Button Mobile -->
+                <button id="btn-close-sidebar" class="md:hidden text-gray-400">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
             </div>
-            <div id="chapter-list" class="flex-1 overflow-y-auto p-2 space-y-1">
+            <div id="chapter-list" class="flex-1 overflow-y-auto p-2 space-y-1 pb-20 md:pb-2">
                 <!-- Chapters injected here -->
                 <div class="text-center text-gray-500 mt-10 text-sm italic p-4">
                     Upload a PDF to detect chapters.
@@ -93,40 +164,50 @@
         </aside>
 
         <!-- Viewer Area -->
-        <section class="flex-1 relative bg-gray-950 flex flex-col items-center justify-center p-8 overflow-hidden">
-            
+        <section
+            class="flex-1 relative bg-gray-950 flex flex-col items-center justify-center p-4 md:p-8 overflow-hidden w-full">
+
             <!-- Empty State -->
-            <div id="empty-state" class="text-center max-w-md">
-                <div class="w-20 h-20 bg-gray-800 rounded-2xl flex items-center justify-center mx-auto mb-6 text-gray-600">
-                    <i data-lucide="file-text" class="w-10 h-10"></i>
+            <div id="empty-state" class="text-center max-w-md px-4">
+                <div
+                    class="w-16 h-16 md:w-20 md:h-20 bg-gray-800 rounded-2xl flex items-center justify-center mx-auto mb-4 md:mb-6 text-gray-600">
+                    <i data-lucide="file-text" class="w-8 h-8 md:w-10 md:h-10"></i>
                 </div>
-                <h3 class="text-2xl font-bold mb-2">No Book Selected</h3>
-                <p class="text-gray-400 mb-6">Upload a PDF to start listening. We'll automatically detect chapters for you.</p>
+                <h3 class="text-xl md:text-2xl font-bold mb-2">No Book Selected</h3>
+                <p class="text-gray-400 mb-6 text-sm md:text-base">Upload a PDF to start listening. We'll automatically
+                    detect chapters for you.</p>
             </div>
 
             <!-- Content Display -->
             <div id="content-display" class="hidden w-full max-w-3xl h-full flex flex-col">
-                <div class="mb-4 flex justify-between items-end">
+                <div class="mb-2 md:mb-4 flex flex-col md:flex-row md:justify-between md:items-end gap-2">
                     <div>
-                         <h2 id="current-chapter-title" class="text-2xl font-bold text-white mb-1">Introduction</h2>
-                         <p class="text-sm text-brand-500">Page <span id="current-page-num">1</span> / <span id="total-pages">--</span></p>
+                        <h2 id="current-chapter-title"
+                            class="text-lg md:text-2xl font-bold text-white mb-1 line-clamp-1">Introduction</h2>
+                        <p class="text-xs md:text-sm text-brand-500">Page <span id="current-page-num">1</span> / <span
+                                id="total-pages">--</span></p>
                     </div>
                 </div>
-                
-                <div class="flex-1 bg-gray-900 rounded-xl border border-gray-800 p-8 shadow-2xl overflow-hidden relative group">
+
+                <div
+                    class="flex-1 bg-gray-900 rounded-xl border border-gray-800 p-4 md:p-8 shadow-2xl overflow-hidden relative group">
                     <!-- Text Container with scrolling -->
-                    <div id="text-container" class="h-full overflow-y-auto pr-2 text-lg leading-relaxed text-gray-300 space-y-4 font-light">
+                    <div id="text-container"
+                        class="h-full overflow-y-auto pr-2 text-base md:text-lg leading-relaxed text-gray-300 space-y-4 font-light">
                         <!-- Extracted text goes here -->
                         <p class="animate-pulse">Loading content...</p>
                     </div>
-                    
+
                     <!-- Gradient overlay for bottom fade -->
-                    <div class="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-gray-900 to-transparent pointer-events-none"></div>
+                    <div
+                        class="absolute bottom-0 left-0 right-0 h-16 md:h-24 bg-gradient-to-t from-gray-900 to-transparent pointer-events-none">
+                    </div>
                 </div>
             </div>
 
             <!-- Loading Overlay -->
-            <div id="loading-overlay" class="absolute inset-0 bg-gray-950/80 backdrop-blur-sm z-50 hidden flex flex-col items-center justify-center">
+            <div id="loading-overlay"
+                class="absolute inset-0 bg-gray-950/80 backdrop-blur-sm z-50 hidden flex flex-col items-center justify-center p-4 text-center">
                 <i data-lucide="loader" class="w-10 h-10 text-brand-500 animate-spin mb-4"></i>
                 <p id="loading-text" class="text-brand-200 font-medium">Processing PDF...</p>
             </div>
@@ -134,37 +215,40 @@
     </main>
 
     <!-- Player Controls -->
-    <footer class="h-24 glass border-t border-gray-800 shrink-0 px-8 flex items-center justify-between z-30">
-        
-        <!-- Info -->
-        <div class="w-1/4">
-            <div class="text-sm text-gray-400">Now Playing</div>
-            <div id="player-title" class="font-medium text-white truncate">--</div>
+    <footer
+        class="h-auto py-3 md:py-0 md:h-24 glass border-t border-gray-800 shrink-0 px-4 md:px-8 flex flex-col md:flex-row items-center justify-between z-30 gap-3 md:gap-0">
+
+        <!-- Info (Hidden on very small mobile if needed, or truncated) -->
+        <div class="w-full md:w-1/4 text-center md:text-left order-2 md:order-1">
+            <div class="text-xs text-gray-400 hidden md:block">Now Playing</div>
+            <div id="player-title" class="font-medium text-white text-sm truncate px-2 md:px-0">--</div>
         </div>
 
         <!-- Controls -->
-        <div class="flex flex-col items-center gap-2 flex-1">
-            <div class="flex items-center gap-6">
+        <div class="flex flex-col items-center gap-2 flex-1 order-1 md:order-2 w-full">
+            <div class="flex items-center justify-center gap-6 w-full">
                 <button id="btn-prev" class="text-gray-400 hover:text-white transition-colors p-2">
-                    <i data-lucide="skip-back" class="w-5 h-5"></i>
+                    <i data-lucide="skip-back" class="w-6 h-6 md:w-5 md:h-5"></i>
                 </button>
-                
-                <button id="btn-play" class="bg-white text-gray-900 w-12 h-12 rounded-full flex items-center justify-center hover:scale-105 transition-transform shadow-lg shadow-white/10">
-                    <i data-lucide="play" class="w-5 h-5 fill-current"></i> <!-- Icon toggles to pause -->
+
+                <button id="btn-play"
+                    class="bg-white text-gray-900 w-12 h-12 md:w-12 md:h-12 rounded-full flex items-center justify-center hover:scale-105 transition-transform shadow-lg shadow-white/10 active:scale-95">
+                    <i data-lucide="play" class="w-6 h-6 md:w-5 md:h-5 fill-current"></i> <!-- Icon toggles to pause -->
                 </button>
-                
+
                 <button id="btn-next" class="text-gray-400 hover:text-white transition-colors p-2">
-                    <i data-lucide="skip-forward" class="w-5 h-5"></i>
+                    <i data-lucide="skip-forward" class="w-6 h-6 md:w-5 md:h-5"></i>
                 </button>
             </div>
         </div>
 
         <!-- Settings -->
-        <div class="w-1/4 flex items-center justify-end gap-4">
+        <div class="w-full md:w-1/4 flex items-center justify-center md:justify-end gap-4 order-3 md:order-3">
             <!-- Speed -->
-            <div class="flex items-center gap-2 group relative">
-                <i data-lucide="gauge" class="w-4 h-4 text-gray-400"></i>
-                <select id="speed-select" class="bg-gray-800 border-none text-xs rounded px-2 py-1 text-gray-300 focus:ring-0 cursor-pointer">
+            <div class="flex items-center gap-2 group relative bg-gray-800/50 p-1 rounded-lg">
+                <i data-lucide="gauge" class="w-3 h-3 md:w-4 md:h-4 text-gray-400 ml-1"></i>
+                <select id="speed-select"
+                    class="bg-transparent border-none text-xs rounded px-1 py-1 text-gray-300 focus:ring-0 cursor-pointer outline-none">
                     <option value="0.75">0.75x</option>
                     <option value="1" selected>1.0x</option>
                     <option value="1.25">1.25x</option>
@@ -174,10 +258,11 @@
             </div>
 
             <!-- Voice -->
-            <div class="flex items-center gap-2 max-w-[150px]">
-                <i data-lucide="mic" class="w-4 h-4 text-gray-400 shrink-0"></i>
-                <select id="voice-select" class="bg-gray-800 border-none text-xs rounded px-2 py-1 text-gray-300 focus:ring-0 cursor-pointer w-full text-ellipsis overflow-hidden">
-                    <option value="">Default Voice</option>
+            <div class="flex items-center gap-2 max-w-[150px] bg-gray-800/50 p-1 rounded-lg">
+                <i data-lucide="mic" class="w-3 h-3 md:w-4 md:h-4 text-gray-400 ml-1 shrink-0"></i>
+                <select id="voice-select"
+                    class="bg-transparent border-none text-xs rounded px-1 py-1 text-gray-300 focus:ring-0 cursor-pointer w-full text-ellipsis overflow-hidden outline-none max-w-[100px]">
+                    <option value="">Default</option>
                 </select>
             </div>
         </div>
@@ -207,7 +292,7 @@
             textContainer: document.getElementById('text-container'),
             loadingOverlay: document.getElementById('loading-overlay'),
             loadingText: document.getElementById('loading-text'),
-            
+
             // Player UI
             btnPlay: document.getElementById('btn-play'),
             btnPrev: document.getElementById('btn-prev'),
@@ -218,6 +303,12 @@
             totalPages: document.getElementById('total-pages'),
             voiceSelect: document.getElementById('voice-select'),
             speedSelect: document.getElementById('speed-select'),
+
+            // Mobile Sidebar
+            sidebar: document.getElementById('sidebar'),
+            btnMenu: document.getElementById('btn-menu'),
+            btnCloseSidebar: document.getElementById('btn-close-sidebar'),
+            backdrop: document.getElementById('sidebar-backdrop'),
         };
 
         const CHAPTER_PATTERNS = [
@@ -231,19 +322,32 @@
         initTTS();
 
         SELECTORS.fileInput.addEventListener('change', handleFileUpload);
-        
+
         // Player Controls
         SELECTORS.btnPlay.addEventListener('click', togglePlay);
         SELECTORS.btnPrev.addEventListener('click', () => skipChapter(-1));
         SELECTORS.btnNext.addEventListener('click', () => skipChapter(1));
         SELECTORS.speedSelect.addEventListener('change', updateRate);
         SELECTORS.voiceSelect.addEventListener('change', () => {
-             // Stop current speech and restart with new voice if playing
-             if (STATE.isPlaying) {
-                 window.speechSynthesis.cancel();
-                 speakCurrentChunk(); 
-             }
+            if (STATE.isPlaying) {
+                window.speechSynthesis.cancel();
+                speakCurrentChunk();
+            }
         });
+
+        // Mobile Sidebar Logic
+        function toggleSidebar(show) {
+            if (show) {
+                SELECTORS.sidebar.classList.add('open');
+                SELECTORS.backdrop.classList.add('show');
+            } else {
+                SELECTORS.sidebar.classList.remove('open');
+                SELECTORS.backdrop.classList.remove('show');
+            }
+        }
+        SELECTORS.btnMenu.addEventListener('click', () => toggleSidebar(true));
+        SELECTORS.btnCloseSidebar.addEventListener('click', () => toggleSidebar(false));
+        SELECTORS.backdrop.addEventListener('click', () => toggleSidebar(false));
 
         // --- Core Functions ---
 
@@ -258,24 +362,24 @@
                 const arrayBuffer = await file.arrayBuffer();
                 const loadingTask = pdfjsLib.getDocument(arrayBuffer);
                 STATE.pdfDoc = await loadingTask.promise;
-                
+
                 SELECTORS.totalPages.innerText = STATE.pdfDoc.numPages;
 
                 showLoading(true, "Scanning Chapters...");
-                
+
                 // 1. Try TOC
                 let chapters = await getChaptersFromTOC(STATE.pdfDoc);
-                
+
                 // 2. Fallback to scanning
                 if (chapters.length === 0) {
-                    showLoading(true, "No TOC found. Scanning pages for chapters... (this might take a moment)");
+                    showLoading(true, "Scanning pages... this may take a moment.");
                     chapters = await scanForChapters(STATE.pdfDoc);
                 }
 
                 // 3. Fallback to single "Full Book" chapter
                 if (chapters.length === 0) {
                     chapters = [{
-                        title: "Full Document",
+                        title: "Full Document (No Chapters Found)",
                         label: "",
                         startPage: 0,
                         endPage: STATE.pdfDoc.numPages - 1
@@ -289,6 +393,11 @@
                 SELECTORS.emptyState.classList.add('hidden');
                 SELECTORS.contentDisplay.classList.remove('hidden');
 
+                // Close sidebar on mobile after load
+                if (window.innerWidth < 768) {
+                    toggleSidebar(false);
+                }
+
             } catch (err) {
                 console.error(err);
                 alert("Error loading PDF: " + err.message);
@@ -301,61 +410,40 @@
             const outline = await doc.getOutline();
             if (!outline || outline.length === 0) return [];
 
-            // Flatten logic simplified: just take top level or obvious chapters
-            // In a real app we might traverse deeper, but this matches the Python logic's "candidates"
-            // Python logic: prefer titles with "Chapter", else level 1.
-            
-            // To simplify mapping outline dest to page number, we need to resolve refs.
-            // This is complex in PDF.js. We will try a simpler approach: 
-            // If explicit destination is provided.
-            
             const chapters = [];
-            
             for (const item of outline) {
-               // item.dest can be string or array. doc.getPageIndex(dest) resolves it.
-               try {
-                   const dest = item.dest;
-                   let ref = dest;
-                   if (typeof dest === 'string') {
-                       // Named destination, not handled easily without deeper lookup
-                       // Skipping complex named dests for this simplified demo unless easy
-                       continue; 
-                   } 
-                   // If array [ref, name, ...]
-                   if (Array.isArray(dest)) {
-                       ref = dest[0]; 
-                   }
-
-                   // Get page index
-                   const pageIndex = await doc.getPageIndex(ref); // 0-based
-                   
-                   chapters.push({
-                       title: item.title,
-                       label: "TOC",
-                       startPage: pageIndex,
-                       endPage: pageIndex // Will fixup later
-                   });
-               } catch (e) { console.log("Skipping outline item", item.title, e); }
+                try {
+                    const dest = item.dest;
+                    let ref = dest;
+                    if (typeof dest === 'string') {
+                        continue;
+                    }
+                    if (Array.isArray(dest)) {
+                        ref = dest[0];
+                    }
+                    const pageIndex = await doc.getPageIndex(ref);
+                    chapters.push({
+                        title: item.title,
+                        label: "TOC",
+                        startPage: pageIndex,
+                        endPage: pageIndex
+                    });
+                } catch (e) { console.log("Skipping outline item", item.title, e); }
             }
-            
             return fixupChapterRanges(chapters, doc.numPages);
         }
 
         async function scanForChapters(doc) {
             const hits = [];
-            
-            // Limit scanning to avoid freezing browser on huge books
-            // scanning 100 pages max for demo or full if reasonable?
-            // Let's do full but maybe with a small delay or yield to UI?
-            
             for (let i = 0; i < doc.numPages; i++) {
+                // Yield to UI every 10 pages
+                if (i % 10 === 0) await new Promise(r => setTimeout(r, 0));
+
                 const page = await doc.getPage(i + 1);
                 const textContent = await page.getTextContent();
                 const text = textContent.items.map(s => s.str).join(' ');
-                
-                // Check first X chars
-                const snippet = text.slice(0, STATE.scanLimit); 
-                
+
+                const snippet = text.slice(0, STATE.scanLimit);
                 for (const pat of CHAPTER_PATTERNS) {
                     const m = snippet.match(pat);
                     if (m) {
@@ -366,40 +454,32 @@
                             label: label,
                             title: title || `Chapter ${label}`
                         });
-                        break; // Found a match on this page
+                        break;
                     }
                 }
             }
-            
             return fixupChapterRanges(hits, doc.numPages);
         }
 
         function fixupChapterRanges(hits, totalPages) {
             if (hits.length === 0) return [];
-
-            // Sort by page
             hits.sort((a, b) => a.startPage - b.startPage);
-
-            // Dedupe
             const dedup = [];
             let lastPage = -999;
             for (const h of hits) {
-                if (h.startPage - lastPage >= 1) { // Min 1 page gap
+                if (h.startPage - lastPage >= 1) {
                     dedup.push(h);
                     lastPage = h.startPage;
                 }
             }
-
-            // Assign end pages
             const finalChapters = dedup.map((ch, i) => {
                 const nextCh = dedup[i + 1];
                 const endPage = nextCh ? nextCh.startPage - 1 : totalPages - 1;
-                return { 
-                    ...ch, 
+                return {
+                    ...ch,
                     endPage: Math.max(ch.startPage, endPage)
                 };
             });
-
             return finalChapters;
         }
 
@@ -407,11 +487,9 @@
 
         function initTTS() {
             if (!('speechSynthesis' in window)) {
-                alert("Your browser does not support Speech Synthesis.");
+                alert("Browser doesn't support Text-to-Speech.");
                 return;
             }
-            
-            // Voices load async
             window.speechSynthesis.onvoiceschanged = populateVoices;
             populateVoices();
         }
@@ -419,11 +497,14 @@
         function populateVoices() {
             STATE.voices = window.speechSynthesis.getVoices();
             const select = SELECTORS.voiceSelect;
-            select.innerHTML = ''; // clear
-            
+            select.innerHTML = '<option value="">Default</option>';
+
+            // Prefer high quality voices
             STATE.voices.forEach((voice, i) => {
                 const option = document.createElement('option');
-                option.textContent = `${voice.name} (${voice.lang})`;
+                // Shorten name for mobile
+                const shortName = voice.name.length > 20 ? voice.name.substring(0, 18) + "..." : voice.name;
+                option.textContent = shortName;
                 option.value = i;
                 select.appendChild(option);
             });
@@ -431,42 +512,33 @@
 
         function updateRate() {
             if (STATE.isPlaying) {
-                // Changing rate requires restart
                 window.speechSynthesis.cancel();
                 speakCurrentChunk();
             }
         }
 
         async function chunkTextForSpeaking(text) {
-             // Split by simple punctuation to act as chunks
-             // Browser speech synthesis has char limits (usually ~32kb but good to be safer ~1000)
-             const maxChars = 200;
-             const regex = /([^.!?]+[.!?]+)/g;
-             const sentences = text.match(regex) || [text];
-             
-             // Merge small sentences
-             const chunks = [];
-             let buf = "";
-             
-             for (const s of sentences) {
-                 const t = s.trim();
-                 if (!t) continue;
-                 if ((buf.length + t.length) < maxChars) {
-                     buf += " " + t;
-                 } else {
-                     if (buf) chunks.push(buf.trim());
-                     buf = t;
-                 }
-             }
-             if (buf) chunks.push(buf.trim());
-             return chunks;
+            const maxChars = 200;
+            const regex = /([^.!?]+[.!?]+)/g;
+            const sentences = text.match(regex) || [text];
+            const chunks = [];
+            let buf = "";
+            for (const s of sentences) {
+                const t = s.trim();
+                if (!t) continue;
+                if ((buf.length + t.length) < maxChars) {
+                    buf += " " + t;
+                } else {
+                    if (buf) chunks.push(buf.trim());
+                    buf = t;
+                }
+            }
+            if (buf) chunks.push(buf.trim());
+            return chunks;
         }
 
         function speakCurrentChunk() {
             if (STATE.currentChunkIndex >= STATE.textChunks.length) {
-                // Done with this text block (page/chapter?)
-                // Ideally move to next page if current chapter has more pages
-                // For this demo, let's just stop or move next
                 STATE.isPlaying = false;
                 updatePlayBtn();
                 return;
@@ -474,8 +546,7 @@
 
             const text = STATE.textChunks[STATE.currentChunkIndex];
             const utterance = new SpeechSynthesisUtterance(text);
-            
-            // Apply settings
+
             const voiceIdx = SELECTORS.voiceSelect.value;
             if (voiceIdx !== "") {
                 utterance.voice = STATE.voices[voiceIdx];
@@ -503,14 +574,11 @@
             if (STATE.chapters.length === 0) return;
 
             if (STATE.isPlaying) {
-                // Pause
                 window.speechSynthesis.cancel();
                 STATE.isPlaying = false;
             } else {
-                // Play
                 STATE.isPlaying = true;
                 if (window.speechSynthesis.paused) {
-                    // unexpected state
                     window.speechSynthesis.resume();
                 } else {
                     speakCurrentChunk();
@@ -520,20 +588,16 @@
         }
 
         function updatePlayBtn() {
-            const icon = SELECTORS.btnPlay.querySelector('i');
             SELECTORS.btnPlay.innerHTML = '';
-            
             if (STATE.isPlaying) {
-                // Pause icon
                 const i = document.createElement('i');
                 i.dataset.lucide = "pause";
-                i.className = "w-5 h-5 fill-current";
+                i.className = "w-6 h-6 md:w-5 md:h-5 fill-current";
                 SELECTORS.btnPlay.appendChild(i);
             } else {
-                // Play icon
                 const i = document.createElement('i');
                 i.dataset.lucide = "play";
-                i.className = "w-5 h-5 fill-current";
+                i.className = "w-6 h-6 md:w-5 md:h-5 fill-current";
                 SELECTORS.btnPlay.appendChild(i);
             }
             lucide.createIcons();
@@ -543,40 +607,45 @@
 
         async function loadChapter(index) {
             if (index < 0 || index >= STATE.chapters.length) return;
-            
+
             STATE.currentChapterIndex = index;
             const ch = STATE.chapters[index];
-            
-            // Update UI
-            renderChapterList(); // to update active state
-            
+
+            renderChapterList();
+
             SELECTORS.currentChapterTitle.innerText = ch.title;
             SELECTORS.playerTitle.innerText = ch.title;
             SELECTORS.currentPageNum.innerText = ch.startPage + 1;
 
-            // Stop any current audio
             window.speechSynthesis.cancel();
             STATE.isPlaying = false;
             updatePlayBtn();
 
-            // Load text from all pages in chapter
             showLoading(true, "Extracting text...");
             let fullText = "";
-            
+
+            // Limit extraction to first 20 pages max per chapter to prevent memory issues on mobile?
+            // For now keep full.
             for (let i = ch.startPage; i <= ch.endPage; i++) {
+                // Yield to UI
+                if ((i - ch.startPage) % 5 === 0) await new Promise(r => setTimeout(r, 0));
+
                 const page = await STATE.pdfDoc.getPage(i + 1);
                 const content = await page.getTextContent();
                 const pageText = content.items.map(item => item.str).join(' ');
                 fullText += pageText + "\n\n";
             }
-            
+
             SELECTORS.textContainer.innerText = fullText;
-            
-            // Prepare chunks for TTS
             STATE.textChunks = await chunkTextForSpeaking(fullText);
             STATE.currentChunkIndex = 0;
-            
+
             showLoading(false);
+
+            // Close sidebar if open (mobile)
+            if (window.innerWidth < 768) {
+                toggleSidebar(false);
+            }
         }
 
         function skipChapter(offset) {
@@ -628,4 +697,5 @@
 
     </script>
 </body>
+
 </html>
