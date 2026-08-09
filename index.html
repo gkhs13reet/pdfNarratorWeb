@@ -126,7 +126,13 @@
                 PDF Narrator
             </h1>
         </div>
-        <div class="flex items-center gap-4">
+        <div class="flex items-center gap-3">
+            <button id="btn-api-key"
+                class="bg-purple-900/40 hover:bg-purple-800/60 text-purple-200 border border-purple-500/30 px-3 py-1.5 md:px-4 md:py-2 rounded-lg transition-all flex items-center gap-2 text-sm font-medium shadow-lg shadow-purple-950/50 cursor-pointer">
+                <i data-lucide="sparkles" class="w-4 h-4 text-purple-400"></i>
+                <span class="hidden md:inline">AI Agent</span>
+                <span class="md:hidden">AI</span>
+            </button>
             <label
                 class="cursor-pointer bg-brand-600 hover:bg-brand-500 text-white px-3 py-1.5 md:px-4 md:py-2 rounded-lg transition-all flex items-center gap-2 text-sm font-medium shadow-lg shadow-brand-900/50">
                 <i data-lucide="upload" class="w-4 h-4"></i>
@@ -267,6 +273,116 @@
             </div>
         </div>
     </footer>
+
+    <!-- Floating Selection Tooltip -->
+    <div id="ai-selection-popover" class="fixed hidden z-50 transition-all duration-150 transform -translate-x-1/2 -translate-y-full pointer-events-auto">
+        <button id="btn-explain-selection"
+            class="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white px-3.5 py-1.5 rounded-full text-xs font-semibold shadow-2xl flex items-center gap-1.5 border border-purple-400/40 backdrop-blur-md cursor-pointer hover:scale-105 active:scale-95 transition-transform">
+            <i data-lucide="sparkles" class="w-3.5 h-3.5 text-yellow-300"></i>
+            <span>Explain with AI</span>
+        </button>
+    </div>
+
+    <!-- AI Agent Modal -->
+    <div id="ai-modal" class="fixed inset-0 bg-gray-950/80 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-xl shadow-2xl flex flex-col max-h-[85vh] overflow-hidden">
+            <!-- Modal Header -->
+            <div class="px-5 py-3.5 border-b border-gray-800 flex justify-between items-center bg-gray-900/90">
+                <div class="flex items-center gap-2.5 text-purple-400">
+                    <div class="p-1.5 rounded-lg bg-purple-500/10 border border-purple-500/20">
+                        <i data-lucide="bot" class="w-5 h-5"></i>
+                    </div>
+                    <h3 class="font-bold text-white text-base md:text-lg">AI Explanation Agent</h3>
+                </div>
+                <button id="btn-close-ai-modal" class="text-gray-400 hover:text-white transition-colors p-1.5 rounded-lg hover:bg-gray-800">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <!-- Modal Body -->
+            <div class="p-5 overflow-y-auto space-y-4 flex-1">
+                <!-- Selected Text Quote -->
+                <div class="bg-gray-950 border-l-4 border-purple-500 p-3 rounded-r-lg text-xs md:text-sm text-gray-300 italic max-h-28 overflow-y-auto">
+                    "<span id="ai-selected-text-quote">Selected line content...</span>"
+                </div>
+
+                <!-- Action Preset Chips -->
+                <div class="flex flex-wrap gap-2 pt-1">
+                    <button class="ai-chip bg-purple-950/60 hover:bg-purple-900/90 text-purple-300 text-xs px-3 py-1.5 rounded-full border border-purple-800/50 flex items-center gap-1.5 transition-all cursor-pointer" data-prompt="explain">
+                        <i data-lucide="sparkles" class="w-3.5 h-3.5"></i> Explain Simply
+                    </button>
+                    <button class="ai-chip bg-indigo-950/60 hover:bg-indigo-900/90 text-indigo-300 text-xs px-3 py-1.5 rounded-full border border-indigo-800/50 flex items-center gap-1.5 transition-all cursor-pointer" data-prompt="bullets">
+                        <i data-lucide="list" class="w-3.5 h-3.5"></i> 3 Key Points
+                    </button>
+                    <button class="ai-chip bg-blue-950/60 hover:bg-blue-900/90 text-blue-300 text-xs px-3 py-1.5 rounded-full border border-blue-800/50 flex items-center gap-1.5 transition-all cursor-pointer" data-prompt="vocab">
+                        <i data-lucide="book-open-check" class="w-3.5 h-3.5"></i> Key Terms
+                    </button>
+                    <button class="ai-chip bg-emerald-950/60 hover:bg-emerald-900/90 text-emerald-300 text-xs px-3 py-1.5 rounded-full border border-emerald-800/50 flex items-center gap-1.5 transition-all cursor-pointer" data-prompt="translate">
+                        <i data-lucide="languages" class="w-3.5 h-3.5"></i> Translate
+                    </button>
+                </div>
+
+                <!-- AI Response Box -->
+                <div id="ai-output-box" class="bg-gray-950/90 rounded-xl p-4 border border-gray-800 min-h-[140px] text-sm text-gray-200 leading-relaxed relative">
+                    <div id="ai-loading" class="hidden flex flex-col items-center justify-center gap-2 text-purple-400 py-8">
+                        <i data-lucide="sparkles" class="w-6 h-6 animate-spin"></i>
+                        <span class="text-xs font-medium">AI Agent is analyzing line meaning...</span>
+                    </div>
+                    <div id="ai-response-text" class="text-xs md:text-sm leading-relaxed whitespace-pre-wrap text-gray-300">
+                        Click one of the buttons above or ask a question to explain this passage.
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="px-5 py-3 border-t border-gray-800 bg-gray-900 flex flex-col md:flex-row items-center justify-between gap-3">
+                <button id="btn-read-ai-response" class="w-full md:w-auto text-xs bg-gray-800 hover:bg-gray-700 text-gray-200 px-3.5 py-2 rounded-lg flex items-center justify-center gap-1.5 transition-colors border border-gray-700/50 cursor-pointer">
+                    <i data-lucide="volume-2" class="w-4 h-4 text-purple-400"></i> Read Aloud
+                </button>
+                <div class="flex items-center gap-2 w-full md:w-auto flex-1 md:max-w-xs">
+                    <input type="text" id="ai-custom-prompt" placeholder="Ask follow-up question..."
+                        class="flex-1 bg-gray-950 border border-gray-800 rounded-lg px-3 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-purple-500">
+                    <button id="btn-send-custom-prompt" class="bg-purple-600 hover:bg-purple-500 text-white p-2 rounded-lg transition-colors shrink-0 cursor-pointer">
+                        <i data-lucide="send" class="w-3.5 h-3.5"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- API Key Modal -->
+    <div id="api-key-modal" class="fixed inset-0 bg-gray-950/80 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4">
+            <div class="flex justify-between items-center">
+                <div class="flex items-center gap-2 text-purple-400">
+                    <i data-lucide="key" class="w-5 h-5"></i>
+                    <h3 class="font-bold text-white text-lg">AI Agent Settings</h3>
+                </div>
+                <button id="btn-close-api-modal" class="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-gray-800">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <p class="text-xs text-gray-400 leading-relaxed">
+                Enter your <strong>Google Gemini API Key</strong> to activate the AI Agent. Your key is stored safely in your browser's <code class="bg-gray-950 px-1 py-0.5 rounded text-purple-300">localStorage</code>.
+            </p>
+            <div>
+                <label class="block text-xs font-semibold text-gray-300 mb-1">Gemini API Key</label>
+                <input type="password" id="input-gemini-key" placeholder="AIzaSy..."
+                    class="w-full bg-gray-950 border border-gray-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500">
+            </div>
+            <div class="flex justify-between items-center text-xs">
+                <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer"
+                    class="text-purple-400 hover:underline flex items-center gap-1">
+                    Get free key from Google AI Studio <i data-lucide="external-link" class="w-3 h-3"></i>
+                </a>
+            </div>
+            <div class="flex justify-end gap-2 pt-2">
+                <button id="btn-save-api-key" class="bg-purple-600 hover:bg-purple-500 text-white text-xs px-4 py-2 rounded-lg font-medium transition-all cursor-pointer">
+                    Save API Key
+                </button>
+            </div>
+        </div>
+    </div>
 
     <!-- Logic -->
     <script>
@@ -693,6 +809,225 @@
             updatePlayBtn();
             SELECTORS.textContainer.innerHTML = '';
             SELECTORS.chapterList.innerHTML = '';
+        }
+
+        // --- AI Agent State & Logic ---
+        STATE.geminiApiKey = localStorage.getItem('gemini_api_key') || '';
+        STATE.selectedText = '';
+
+        SELECTORS.btnApiKey = document.getElementById('btn-api-key');
+        SELECTORS.apiKeyModal = document.getElementById('api-key-modal');
+        SELECTORS.btnCloseApiModal = document.getElementById('btn-close-api-modal');
+        SELECTORS.btnSaveApiKey = document.getElementById('btn-save-api-key');
+        SELECTORS.inputGeminiKey = document.getElementById('input-gemini-key');
+
+        SELECTORS.aiSelectionPopover = document.getElementById('ai-selection-popover');
+        SELECTORS.btnExplainSelection = document.getElementById('btn-explain-selection');
+        SELECTORS.aiModal = document.getElementById('ai-modal');
+        SELECTORS.btnCloseAiModal = document.getElementById('btn-close-ai-modal');
+        SELECTORS.aiSelectedTextQuote = document.getElementById('ai-selected-text-quote');
+        SELECTORS.aiOutputBox = document.getElementById('ai-output-box');
+        SELECTORS.aiLoading = document.getElementById('ai-loading');
+        SELECTORS.aiResponseText = document.getElementById('ai-response-text');
+        SELECTORS.btnReadAiResponse = document.getElementById('btn-read-ai-response');
+        SELECTORS.aiCustomPrompt = document.getElementById('ai-custom-prompt');
+        SELECTORS.btnSendCustomPrompt = document.getElementById('btn-send-custom-prompt');
+
+        // Init API Key field
+        if (SELECTORS.inputGeminiKey) {
+            SELECTORS.inputGeminiKey.value = STATE.geminiApiKey;
+        }
+
+        // API Key Modal Listeners
+        if (SELECTORS.btnApiKey) {
+            SELECTORS.btnApiKey.addEventListener('click', () => {
+                SELECTORS.inputGeminiKey.value = STATE.geminiApiKey;
+                SELECTORS.apiKeyModal.classList.remove('hidden');
+            });
+        }
+        if (SELECTORS.btnCloseApiModal) {
+            SELECTORS.btnCloseApiModal.addEventListener('click', () => {
+                SELECTORS.apiKeyModal.classList.add('hidden');
+            });
+        }
+        if (SELECTORS.btnSaveApiKey) {
+            SELECTORS.btnSaveApiKey.addEventListener('click', () => {
+                const key = SELECTORS.inputGeminiKey.value.trim();
+                STATE.geminiApiKey = key;
+                localStorage.setItem('gemini_api_key', key);
+                SELECTORS.apiKeyModal.classList.add('hidden');
+                if (key) {
+                    alert("Gemini API Key saved successfully!");
+                }
+            });
+        }
+
+        // Text Selection Listeners
+        document.addEventListener('mouseup', handleTextSelection);
+        document.addEventListener('keyup', handleTextSelection);
+        if (SELECTORS.btnExplainSelection) {
+            SELECTORS.btnExplainSelection.addEventListener('click', () => {
+                if (STATE.selectedText) {
+                    openAiModal(STATE.selectedText);
+                    hideAiPopover();
+                }
+            });
+        }
+        if (SELECTORS.btnCloseAiModal) {
+            SELECTORS.btnCloseAiModal.addEventListener('click', closeAiModal);
+        }
+
+        // Chip Prompt listeners
+        document.querySelectorAll('.ai-chip').forEach(chip => {
+            chip.addEventListener('click', () => {
+                const action = chip.dataset.prompt;
+                fetchAiExplanation(action);
+            });
+        });
+
+        // Custom Prompt Send listener
+        if (SELECTORS.btnSendCustomPrompt) {
+            SELECTORS.btnSendCustomPrompt.addEventListener('click', () => {
+                const prompt = SELECTORS.aiCustomPrompt.value.trim();
+                if (prompt) {
+                    fetchAiExplanation('custom', prompt);
+                    SELECTORS.aiCustomPrompt.value = '';
+                }
+            });
+        }
+        if (SELECTORS.aiCustomPrompt) {
+            SELECTORS.aiCustomPrompt.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    const prompt = SELECTORS.aiCustomPrompt.value.trim();
+                    if (prompt) {
+                        fetchAiExplanation('custom', prompt);
+                        SELECTORS.aiCustomPrompt.value = '';
+                    }
+                }
+            });
+        }
+
+        // TTS for AI Response
+        if (SELECTORS.btnReadAiResponse) {
+            SELECTORS.btnReadAiResponse.addEventListener('click', () => {
+                const textToRead = SELECTORS.aiResponseText.innerText;
+                if (!textToRead) return;
+                window.speechSynthesis.cancel();
+                const utterance = new SpeechSynthesisUtterance(textToRead);
+                utterance.rate = parseFloat(SELECTORS.speedSelect.value) || 1.0;
+                const voiceIdx = SELECTORS.voiceSelect.value;
+                if (voiceIdx !== "") {
+                    utterance.voice = STATE.voices[voiceIdx];
+                }
+                window.speechSynthesis.speak(utterance);
+            });
+        }
+
+        function handleTextSelection(e) {
+            if (SELECTORS.aiSelectionPopover.contains(e.target) || 
+                SELECTORS.aiModal.contains(e.target) || 
+                SELECTORS.apiKeyModal.contains(e.target)) {
+                return;
+            }
+
+            const selection = window.getSelection();
+            const text = selection.toString().trim();
+
+            if (text.length > 2 && SELECTORS.textContainer.contains(selection.anchorNode)) {
+                STATE.selectedText = text;
+                const range = selection.getRangeAt(0);
+                const rect = range.getBoundingClientRect();
+                
+                showAiPopover(rect.left + rect.width / 2, rect.top);
+            } else {
+                hideAiPopover();
+            }
+        }
+
+        function showAiPopover(x, y) {
+            const popover = SELECTORS.aiSelectionPopover;
+            popover.style.left = `${x}px`;
+            popover.style.top = `${y - 8}px`;
+            popover.classList.remove('hidden');
+            lucide.createIcons();
+        }
+
+        function hideAiPopover() {
+            SELECTORS.aiSelectionPopover.classList.add('hidden');
+        }
+
+        function openAiModal(text) {
+            SELECTORS.aiSelectedTextQuote.innerText = text;
+            SELECTORS.aiResponseText.innerText = 'Click "Explain Simply" above or ask a question to analyze this passage.';
+            SELECTORS.aiModal.classList.remove('hidden');
+            lucide.createIcons();
+            
+            // Auto trigger explanation on open
+            fetchAiExplanation('explain');
+        }
+
+        function closeAiModal() {
+            SELECTORS.aiModal.classList.add('hidden');
+            window.speechSynthesis.cancel();
+        }
+
+        async function fetchAiExplanation(actionType, customPrompt = '') {
+            if (!STATE.selectedText) return;
+
+            if (!STATE.geminiApiKey) {
+                SELECTORS.apiKeyModal.classList.remove('hidden');
+                SELECTORS.aiResponseText.innerText = '⚠️ Please save your Gemini API Key in AI Agent Settings to enable AI explanations.';
+                return;
+            }
+
+            SELECTORS.aiLoading.classList.remove('hidden');
+            SELECTORS.aiLoading.classList.add('flex');
+            SELECTORS.aiResponseText.innerText = '';
+
+            let prompt = "";
+
+            if (actionType === 'explain') {
+                prompt = `Explain the following text excerpt simply and clearly in 2-3 sentences:\n\n"${STATE.selectedText}"`;
+            } else if (actionType === 'bullets') {
+                prompt = `Provide 3 key bullet points summarizing the main ideas in this excerpt:\n\n"${STATE.selectedText}"`;
+            } else if (actionType === 'vocab') {
+                prompt = `Identify key terms or concepts in this excerpt and briefly explain them:\n\n"${STATE.selectedText}"`;
+            } else if (actionType === 'translate') {
+                prompt = `Translate this excerpt into Hindi & Spanish and briefly summarize its meaning:\n\n"${STATE.selectedText}"`;
+            } else if (actionType === 'custom') {
+                prompt = `Regarding the excerpt: "${STATE.selectedText}"\n\nQuestion: ${customPrompt}`;
+            }
+
+            try {
+                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${STATE.geminiApiKey}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        contents: [{
+                            parts: [{ text: prompt }]
+                        }]
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.error) {
+                    SELECTORS.aiResponseText.innerText = `❌ Error from Gemini API: ${data.error.message || 'Invalid API key or request'}`;
+                } else if (data.candidates && data.candidates[0] && data.candidates[0].content) {
+                    const reply = data.candidates[0].content.parts[0].text;
+                    SELECTORS.aiResponseText.innerText = reply;
+                } else {
+                    SELECTORS.aiResponseText.innerText = 'Unexpected response from AI service.';
+                }
+            } catch (err) {
+                SELECTORS.aiResponseText.innerText = `❌ Network Error: Unable to reach Gemini API. (${err.message})`;
+            } finally {
+                SELECTORS.aiLoading.classList.add('hidden');
+                SELECTORS.aiLoading.classList.remove('flex');
+                lucide.createIcons();
+            }
         }
 
     </script>

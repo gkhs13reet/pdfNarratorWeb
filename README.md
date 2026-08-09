@@ -4,8 +4,11 @@ A modern, responsive, client-side web application that transforms PDF documents 
 
 ---
 
-## 🌟 Key Features
-
+- 🤖 **Interactive AI Explanation Agent**:
+  - Select any text line or passage in the reader to trigger a floating **"✨ Explain with AI"** action button.
+  - Generates instant summaries, simple explanations ("Explain Like I'm 5"), key vocabulary breakdowns, and translations (Hindi/Spanish) via **Google Gemini API**.
+  - Includes TTS read-aloud button for listening to AI explanations out loud.
+  - Secure in-browser API key management stored in `localStorage`.
 - 📄 **100% Client-Side PDF Processing**: Load and read PDFs directly in the browser without uploading documents to external servers.
 - 📑 **Smart Chapter Detection**:
   - Automatically parses PDF Table of Contents / Outline metadata (`doc.getOutline()`).
