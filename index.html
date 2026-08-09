@@ -185,14 +185,19 @@
             class="flex-1 relative bg-gray-950 flex flex-col items-center justify-center p-4 md:p-8 overflow-hidden w-full">
 
             <!-- Empty State -->
-            <div id="empty-state" class="text-center max-w-md px-4">
+            <div id="empty-state" class="text-center max-w-md px-4 flex flex-col items-center">
                 <div
-                    class="w-16 h-16 md:w-20 md:h-20 bg-gray-800 rounded-2xl flex items-center justify-center mx-auto mb-4 md:mb-6 text-gray-600">
+                    class="w-16 h-16 md:w-20 md:h-20 bg-gray-800/80 border border-gray-700/50 rounded-2xl flex items-center justify-center mx-auto mb-4 md:mb-6 text-brand-400 shadow-xl">
                     <i data-lucide="file-text" class="w-8 h-8 md:w-10 md:h-10"></i>
                 </div>
                 <h3 class="text-xl md:text-2xl font-bold mb-2">No Book Selected</h3>
-                <p class="text-gray-400 mb-6 text-sm md:text-base">Upload a PDF to start listening. We'll automatically
-                    detect chapters for you.</p>
+                <p class="text-gray-400 mb-6 text-sm md:text-base">Upload or drag & drop a PDF to start listening and analyzing with AI.</p>
+                <label
+                    class="cursor-pointer bg-brand-600 hover:bg-brand-500 text-white px-5 py-2.5 rounded-xl transition-all flex items-center gap-2 text-sm font-semibold shadow-lg shadow-brand-900/50 active:scale-95">
+                    <i data-lucide="upload" class="w-4 h-4"></i>
+                    <span>Select PDF File</span>
+                    <input type="file" id="file-upload-empty" class="hidden" accept="application/pdf">
+                </label>
             </div>
 
             <!-- Content Display -->
@@ -432,6 +437,8 @@
             loadingOverlay: document.getElementById('loading-overlay'),
             loadingText: document.getElementById('loading-text'),
 
+            fileInputEmpty: document.getElementById('file-upload-empty'),
+
             // Player UI
             btnPlay: document.getElementById('btn-play'),
             btnPrev: document.getElementById('btn-prev'),
@@ -465,11 +472,12 @@
         lucide.createIcons();
         initTTS();
 
-        // Init
-        lucide.createIcons();
-        initTTS();
-
-        SELECTORS.fileInput.addEventListener('change', handleFileUpload);
+        if (SELECTORS.fileInput) {
+            SELECTORS.fileInput.addEventListener('change', handleFileUpload);
+        }
+        if (SELECTORS.fileInputEmpty) {
+            SELECTORS.fileInputEmpty.addEventListener('change', handleFileUpload);
+        }
 
         // Timeline Scrubber Control
         if (SELECTORS.progressScrubber) {
@@ -491,19 +499,31 @@
         }
 
         // Drag and Drop PDF Handling
-        window.addEventListener('dragover', (e) => {
+        let dragCounter = 0;
+        window.addEventListener('dragenter', (e) => {
             e.preventDefault();
+            dragCounter++;
             if (SELECTORS.dropOverlay) SELECTORS.dropOverlay.classList.remove('hidden');
         });
+
+        window.addEventListener('dragover', (e) => {
+            e.preventDefault();
+        });
+
         window.addEventListener('dragleave', (e) => {
-            if (e.clientX <= 0 || e.clientY <= 0 || e.clientX >= window.innerWidth || e.clientY >= window.innerHeight) {
+            e.preventDefault();
+            dragCounter--;
+            if (dragCounter <= 0) {
+                dragCounter = 0;
                 if (SELECTORS.dropOverlay) SELECTORS.dropOverlay.classList.add('hidden');
             }
         });
+
         window.addEventListener('drop', (e) => {
             e.preventDefault();
+            dragCounter = 0;
             if (SELECTORS.dropOverlay) SELECTORS.dropOverlay.classList.add('hidden');
-            if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]) {
+            if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
                 const file = e.dataTransfer.files[0];
                 if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
                     processPdfFile(file);
@@ -514,12 +534,19 @@
         });
 
         async function processPdfFile(file) {
+            if (!file) return;
             showLoading(true, "Loading PDF...");
             resetState();
 
             try {
                 const arrayBuffer = await file.arrayBuffer();
-                const loadingTask = pdfjsLib.getDocument(arrayBuffer);
+                let loadingTask;
+                try {
+                    loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) });
+                } catch (e) {
+                    loadingTask = pdfjsLib.getDocument(arrayBuffer);
+                }
+                
                 STATE.pdfDoc = await loadingTask.promise;
 
                 SELECTORS.totalPages.innerText = STATE.pdfDoc.numPages;
@@ -551,8 +578,8 @@
                     toggleSidebar(false);
                 }
             } catch (err) {
-                console.error(err);
-                alert("Error loading PDF: " + err.message);
+                console.error("PDF Parsing Error:", err);
+                alert("Error loading PDF: " + (err.message || err.toString() || "Failed to load PDF"));
             } finally {
                 showLoading(false);
             }
