@@ -108,7 +108,18 @@
     </style>
 </head>
 
-<body class="bg-gray-900 text-gray-100 h-[100dvh] flex flex-col overflow-hidden">
+<body class="bg-gray-900 text-gray-100 h-[100dvh] flex flex-col overflow-hidden relative">
+
+    <!-- Drag and Drop Overlay -->
+    <div id="drop-overlay" class="fixed inset-0 bg-brand-600/20 backdrop-blur-md border-4 border-dashed border-brand-500 z-50 hidden flex flex-col items-center justify-center pointer-events-none transition-all duration-200">
+        <div class="bg-gray-900/95 p-8 rounded-2xl border border-brand-500/50 text-center shadow-2xl space-y-3">
+            <div class="p-3 rounded-full bg-brand-500/20 text-brand-400 inline-block">
+                <i data-lucide="upload-cloud" class="w-12 h-12 animate-bounce"></i>
+            </div>
+            <h3 class="text-xl font-bold text-white">Drop your PDF here</h3>
+            <p class="text-xs text-gray-400">Release to start instant audio narration & AI analysis</p>
+        </div>
+    </div>
 
     <!-- Header -->
     <header class="h-14 md:h-16 glass z-20 flex items-center justify-between px-4 md:px-6 shrink-0 relative">
@@ -231,15 +242,27 @@
         </div>
 
         <!-- Controls -->
-        <div class="flex flex-col items-center gap-2 flex-1 order-1 md:order-2 w-full">
+        <div class="flex flex-col items-center gap-1 flex-1 order-1 md:order-2 w-full max-w-md">
+            <!-- Progress Scrubber Bar -->
+            <div class="w-full flex items-center gap-2 px-2">
+                <span id="time-current" class="text-[10px] text-brand-400 font-mono w-8 text-right shrink-0">0%</span>
+                <div class="flex-1 relative group cursor-pointer py-1.5" id="progress-container">
+                    <div class="h-1.5 w-full bg-gray-800 rounded-full overflow-hidden">
+                        <div id="progress-bar" class="h-full bg-gradient-to-r from-brand-500 to-purple-500 w-0 transition-all duration-150"></div>
+                    </div>
+                    <input type="range" id="progress-scrubber" min="0" max="100" value="0" class="absolute inset-0 w-full opacity-0 cursor-pointer">
+                </div>
+                <span id="time-total" class="text-[10px] text-gray-400 font-mono w-8 shrink-0">100%</span>
+            </div>
+
             <div class="flex items-center justify-center gap-6 w-full">
                 <button id="btn-prev" class="text-gray-400 hover:text-white transition-colors p-2">
                     <i data-lucide="skip-back" class="w-6 h-6 md:w-5 md:h-5"></i>
                 </button>
 
                 <button id="btn-play"
-                    class="bg-white text-gray-900 w-12 h-12 md:w-12 md:h-12 rounded-full flex items-center justify-center hover:scale-105 transition-transform shadow-lg shadow-white/10 active:scale-95">
-                    <i data-lucide="play" class="w-6 h-6 md:w-5 md:h-5 fill-current"></i> <!-- Icon toggles to pause -->
+                    class="bg-white text-gray-900 w-12 h-12 md:w-12 md:h-12 rounded-full flex items-center justify-center hover:scale-105 transition-transform shadow-lg shadow-white/10 active:scale-95 cursor-pointer">
+                    <i data-lucide="play" class="w-6 h-6 md:w-5 md:h-5 fill-current"></i>
                 </button>
 
                 <button id="btn-next" class="text-gray-400 hover:text-white transition-colors p-2">
@@ -419,6 +442,11 @@
             totalPages: document.getElementById('total-pages'),
             voiceSelect: document.getElementById('voice-select'),
             speedSelect: document.getElementById('speed-select'),
+            progressBar: document.getElementById('progress-bar'),
+            progressScrubber: document.getElementById('progress-scrubber'),
+            timeCurrent: document.getElementById('time-current'),
+            timeTotal: document.getElementById('time-total'),
+            dropOverlay: document.getElementById('drop-overlay'),
 
             // Mobile Sidebar
             sidebar: document.getElementById('sidebar'),
@@ -437,7 +465,98 @@
         lucide.createIcons();
         initTTS();
 
+        // Init
+        lucide.createIcons();
+        initTTS();
+
         SELECTORS.fileInput.addEventListener('change', handleFileUpload);
+
+        // Timeline Scrubber Control
+        if (SELECTORS.progressScrubber) {
+            SELECTORS.progressScrubber.addEventListener('input', (e) => {
+                if (STATE.textChunks.length === 0) return;
+                const pct = parseInt(e.target.value);
+                const targetIndex = Math.min(
+                    STATE.textChunks.length - 1,
+                    Math.floor((pct / 100) * STATE.textChunks.length)
+                );
+                STATE.currentChunkIndex = targetIndex;
+                window.speechSynthesis.cancel();
+                if (STATE.isPlaying) {
+                    speakCurrentChunk();
+                } else {
+                    highlightActiveSentence(targetIndex);
+                }
+            });
+        }
+
+        // Drag and Drop PDF Handling
+        window.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            if (SELECTORS.dropOverlay) SELECTORS.dropOverlay.classList.remove('hidden');
+        });
+        window.addEventListener('dragleave', (e) => {
+            if (e.clientX <= 0 || e.clientY <= 0 || e.clientX >= window.innerWidth || e.clientY >= window.innerHeight) {
+                if (SELECTORS.dropOverlay) SELECTORS.dropOverlay.classList.add('hidden');
+            }
+        });
+        window.addEventListener('drop', (e) => {
+            e.preventDefault();
+            if (SELECTORS.dropOverlay) SELECTORS.dropOverlay.classList.add('hidden');
+            if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]) {
+                const file = e.dataTransfer.files[0];
+                if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+                    processPdfFile(file);
+                } else {
+                    alert('Please drop a valid PDF file.');
+                }
+            }
+        });
+
+        async function processPdfFile(file) {
+            showLoading(true, "Loading PDF...");
+            resetState();
+
+            try {
+                const arrayBuffer = await file.arrayBuffer();
+                const loadingTask = pdfjsLib.getDocument(arrayBuffer);
+                STATE.pdfDoc = await loadingTask.promise;
+
+                SELECTORS.totalPages.innerText = STATE.pdfDoc.numPages;
+
+                showLoading(true, "Scanning Chapters...");
+
+                let chapters = await getChaptersFromTOC(STATE.pdfDoc);
+                if (chapters.length === 0) {
+                    showLoading(true, "Scanning pages... this may take a moment.");
+                    chapters = await scanForChapters(STATE.pdfDoc);
+                }
+                if (chapters.length === 0) {
+                    chapters = [{
+                        title: "Full Document (No Chapters Found)",
+                        label: "",
+                        startPage: 0,
+                        endPage: STATE.pdfDoc.numPages - 1
+                    }];
+                }
+
+                STATE.chapters = chapters;
+                renderChapterList();
+                loadChapter(0);
+
+                SELECTORS.emptyState.classList.add('hidden');
+                SELECTORS.contentDisplay.classList.remove('hidden');
+
+                if (window.innerWidth < 768) {
+                    toggleSidebar(false);
+                }
+            } catch (err) {
+                console.error(err);
+                alert("Error loading PDF: " + err.message);
+            } finally {
+                showLoading(false);
+            }
+        }
 
         // Player Controls
         SELECTORS.btnPlay.addEventListener('click', togglePlay);
@@ -469,56 +588,8 @@
 
         async function handleFileUpload(e) {
             const file = e.target.files[0];
-            if (!file) return;
-
-            showLoading(true, "Loading PDF...");
-            resetState();
-
-            try {
-                const arrayBuffer = await file.arrayBuffer();
-                const loadingTask = pdfjsLib.getDocument(arrayBuffer);
-                STATE.pdfDoc = await loadingTask.promise;
-
-                SELECTORS.totalPages.innerText = STATE.pdfDoc.numPages;
-
-                showLoading(true, "Scanning Chapters...");
-
-                // 1. Try TOC
-                let chapters = await getChaptersFromTOC(STATE.pdfDoc);
-
-                // 2. Fallback to scanning
-                if (chapters.length === 0) {
-                    showLoading(true, "Scanning pages... this may take a moment.");
-                    chapters = await scanForChapters(STATE.pdfDoc);
-                }
-
-                // 3. Fallback to single "Full Book" chapter
-                if (chapters.length === 0) {
-                    chapters = [{
-                        title: "Full Document (No Chapters Found)",
-                        label: "",
-                        startPage: 0,
-                        endPage: STATE.pdfDoc.numPages - 1
-                    }];
-                }
-
-                STATE.chapters = chapters;
-                renderChapterList();
-                loadChapter(0);
-
-                SELECTORS.emptyState.classList.add('hidden');
-                SELECTORS.contentDisplay.classList.remove('hidden');
-
-                // Close sidebar on mobile after load
-                if (window.innerWidth < 768) {
-                    toggleSidebar(false);
-                }
-
-            } catch (err) {
-                console.error(err);
-                alert("Error loading PDF: " + err.message);
-            } finally {
-                showLoading(false);
+            if (file) {
+                processPdfFile(file);
             }
         }
 
@@ -653,12 +724,55 @@
             return chunks;
         }
 
+        function renderSentenceSpans(chunks) {
+            SELECTORS.textContainer.innerHTML = '';
+            chunks.forEach((chunkText, idx) => {
+                const span = document.createElement('span');
+                span.className = 'sentence-item inline rounded transition-all duration-200 hover:bg-gray-800/80 cursor-pointer p-0.5 leading-relaxed';
+                span.dataset.index = idx;
+                span.innerText = chunkText + ' ';
+                span.onclick = (e) => {
+                    e.stopPropagation();
+                    STATE.currentChunkIndex = idx;
+                    window.speechSynthesis.cancel();
+                    if (STATE.isPlaying) {
+                        speakCurrentChunk();
+                    } else {
+                        highlightActiveSentence(idx);
+                    }
+                };
+                SELECTORS.textContainer.appendChild(span);
+            });
+        }
+
+        function highlightActiveSentence(index) {
+            document.querySelectorAll('.sentence-item').forEach((el) => {
+                const idx = parseInt(el.dataset.index);
+                if (idx === index) {
+                    el.className = 'sentence-item inline rounded transition-all duration-200 bg-brand-500/35 text-white font-normal border-b-2 border-brand-400 p-0.5 leading-relaxed shadow-md';
+                    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                } else {
+                    el.className = 'sentence-item inline rounded transition-all duration-200 hover:bg-gray-800/80 cursor-pointer p-0.5 leading-relaxed';
+                }
+            });
+
+            // Update Progress Scrubber
+            if (STATE.textChunks.length > 0) {
+                const pct = Math.round(((index + 1) / STATE.textChunks.length) * 100);
+                if (SELECTORS.progressBar) SELECTORS.progressBar.style.width = `${pct}%`;
+                if (SELECTORS.progressScrubber) SELECTORS.progressScrubber.value = pct;
+                if (SELECTORS.timeCurrent) SELECTORS.timeCurrent.innerText = `${pct}%`;
+            }
+        }
+
         function speakCurrentChunk() {
             if (STATE.currentChunkIndex >= STATE.textChunks.length) {
                 STATE.isPlaying = false;
                 updatePlayBtn();
                 return;
             }
+
+            highlightActiveSentence(STATE.currentChunkIndex);
 
             const text = STATE.textChunks[STATE.currentChunkIndex];
             const utterance = new SpeechSynthesisUtterance(text);
@@ -740,10 +854,7 @@
             showLoading(true, "Extracting text...");
             let fullText = "";
 
-            // Limit extraction to first 20 pages max per chapter to prevent memory issues on mobile?
-            // For now keep full.
             for (let i = ch.startPage; i <= ch.endPage; i++) {
-                // Yield to UI
                 if ((i - ch.startPage) % 5 === 0) await new Promise(r => setTimeout(r, 0));
 
                 const page = await STATE.pdfDoc.getPage(i + 1);
@@ -752,13 +863,13 @@
                 fullText += pageText + "\n\n";
             }
 
-            SELECTORS.textContainer.innerText = fullText;
             STATE.textChunks = await chunkTextForSpeaking(fullText);
             STATE.currentChunkIndex = 0;
+            renderSentenceSpans(STATE.textChunks);
+            highlightActiveSentence(0);
 
             showLoading(false);
 
-            // Close sidebar if open (mobile)
             if (window.innerWidth < 768) {
                 toggleSidebar(false);
             }
