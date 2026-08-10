@@ -1,0 +1,106 @@
+name: Repair PDF upload
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    if: ${{ !contains(github.event.head_commit.message, 'fix: repair missing PDF upload helper functions') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Add missing upload helpers
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path('index.html')
+          text = path.read_text(encoding='utf-8')
+
+          marker = '        // File Upload Handler'
+          if marker not in text:
+              raise SystemExit('File Upload Handler marker not found')
+
+          helpers = r'''        // Reset application state before opening another PDF.
+          function resetState() {
+              window.speechSynthesis.cancel();
+              STATE.pdfDoc = null;
+              STATE.chapters = [];
+              STATE.currentChapterIndex = 0;
+              STATE.isPlaying = false;
+              STATE.utterance = null;
+              STATE.textChunks = [];
+              STATE.currentChunkIndex = 0;
+              SELECTORS.chapterList.innerHTML = '<div class="text-center text-sm text-gray-500 py-8">Loading PDF...</div>';
+              SELECTORS.chapterCount.innerText = '0';
+              SELECTORS.textContainer.innerText = 'Loading PDF...';
+              SELECTORS.currentChapterTitle.innerText = 'Loading PDF...';
+              SELECTORS.playerTitle.innerText = 'Loading PDF...';
+              SELECTORS.currentPageNum.innerText = '-';
+              updatePlayBtn();
+          }
+
+          // Show/hide the loading overlay.
+          function showLoading(show, message = 'Processing...') {
+              SELECTORS.loadingText.innerText = message;
+              if (show) {
+                  SELECTORS.loadingOverlay.classList.remove('hidden');
+              } else {
+                  SELECTORS.loadingOverlay.classList.add('hidden');
+              }
+          }
+
+          function highlightActiveChapter(index) {
+              const buttons = SELECTORS.chapterList.querySelectorAll('button');
+              buttons.forEach((button, i) => {
+                  button.classList.toggle('active-chapter', i === index);
+              });
+          }
+
+          // File Upload Handler
+'''
+          text = text.replace(marker, helpers, 1)
+
+          # Make the same PDF selectable again after an upload attempt.
+          text = text.replace('accept="application/pdf"', 'accept=".pdf,application/pdf"', 1)
+
+          # Add a robust fallback for browsers where File.arrayBuffer is unavailable.
+          old = '''                const arrayBuffer = await file.arrayBuffer();
+                STATE.pdfDoc = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;'''
+          new = '''                let arrayBuffer;
+                if (typeof file.arrayBuffer === 'function') {
+                    arrayBuffer = await file.arrayBuffer();
+                } else {
+                    arrayBuffer = await new Promise((resolve, reject) => {
+                        const reader = new FileReader();
+                        reader.onload = () => resolve(reader.result);
+                        reader.onerror = () => reject(reader.error || new Error('Could not read PDF file'));
+                        reader.readAsArrayBuffer(file);
+                    });
+                }
+                STATE.pdfDoc = await pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) }).promise;'''
+          if old not in text:
+              raise SystemExit('PDF loading code not found')
+          text = text.replace(old, new, 1)
+
+          path.write_text(text, encoding='utf-8')
+
+      - name: Verify
+        run: |
+          grep -q "function resetState" index.html
+          grep -q "function showLoading" index.html
+          grep -q "function highlightActiveChapter" index.html
+          grep -q "FileReader" index.html
+
+      - name: Commit repair
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html
+          git commit -m "fix: repair missing PDF upload helper functions"
+          git push
