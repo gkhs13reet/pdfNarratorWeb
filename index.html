@@ -1,434 +1,113 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PDF Chapter Audio Reader</title>
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Lucide Icons -->
-    <script src="https://unpkg.com/lucide@latest"></script>
-    <!-- PDF.js -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-    <style>
-        .active-chapter {
-            background-color: rgba(59, 130, 246, 0.15);
-            border-left: 4px solid #3b82f6;
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PDF Narrator & AI Translator</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+body{font-family:Arial,sans-serif}.drop{border:2px dashed #4b5563}.drop.drag{border-color:#3b82f6;background:#111827}.chapter.active{background:#1e3a5f}
+</style>
 </head>
+<body class="bg-gray-950 text-gray-100 min-h-screen">
+<header class="bg-gray-900 border-b border-gray-800 p-4 flex flex-wrap gap-3 items-center justify-between">
+<h1 class="text-xl font-bold">📖 PDF Narrator & AI Translator</h1>
+<div class="flex gap-2">
+<button id="openBtn" type="button" class="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded-lg">📄 Open PDF</button>
+<button id="translateBtn" type="button" class="bg-purple-600 hover:bg-purple-500 px-4 py-2 rounded-lg">🌐 AI Translate</button>
+<input id="pdfInput" type="file" accept=".pdf,application/pdf" style="display:none">
+</div>
+</header>
 
-<body class="bg-gray-950 text-gray-100 min-h-screen flex flex-col font-sans antialiased">
+<main class="max-w-7xl mx-auto p-4 grid md:grid-cols-[280px_1fr] gap-4">
+<aside class="bg-gray-900 rounded-xl p-3">
+<h2 class="font-bold mb-3">Chapters <span id="count" class="text-gray-400">0</span></h2>
+<div id="chapters" class="space-y-1 max-h-[70vh] overflow-auto"></div>
+</aside>
 
-    <!-- Top Bar -->
-    <header class="bg-gray-900 border-b border-gray-800 p-4 flex items-center justify-between sticky top-0 z-20">
-        <div class="flex items-center gap-3">
-            <button id="btnToggleSidebar" class="p-2 hover:bg-gray-800 rounded-lg md:hidden">
-                <i data-lucide="menu"></i>
-            </button>
-            <h1 class="text-lg font-semibold flex items-center gap-2">
-                <i data-lucide="book-open-check" class="text-blue-500"></i>
-                <span id="currentChapterTitle">No PDF Loaded</span>
-            </h1>
-        </div>
-        <div class="flex items-center gap-3">
-            <!-- GitHub Link Button -->
-            <a href="https://github.com/YOUR-USERNAME/YOUR-REPOSITORY" target="_blank" rel="noopener noreferrer" 
-               class="p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-all flex items-center gap-2 text-sm border border-gray-800">
-                <i data-lucide="github"></i>
-                <span class="hidden sm:inline">GitHub</span>
-            </a>
+<section class="bg-gray-900 rounded-xl p-4 min-h-[70vh]">
+<div id="dropZone" class="drop rounded-xl p-8 text-center mb-4 cursor-pointer">
+<div class="text-5xl mb-3">📄</div>
+<h2 class="text-xl font-bold">Upload a PDF file</h2>
+<p class="text-gray-400 mt-2">Click here or click <b>Open PDF</b>, or drag and drop a PDF.</p>
+<p id="fileName" class="text-blue-400 mt-3"></p>
+</div>
+<div id="status" class="text-sm text-gray-400 mb-3">No PDF loaded.</div>
+<h2 id="chapterTitle" class="text-xl font-bold mb-3">No PDF Loaded</h2>
+<div id="text" class="whitespace-pre-wrap leading-7 text-gray-300">Select a PDF to begin reading.</div>
+<div class="mt-6 flex gap-2">
+<button id="prev" class="bg-gray-800 px-4 py-2 rounded-lg">← Previous</button>
+<button id="play" class="bg-blue-600 px-4 py-2 rounded-lg">▶ Play</button>
+<button id="next" class="bg-gray-800 px-4 py-2 rounded-lg">Next →</button>
+</div>
+</section>
+</main>
 
-            <!-- Open PDF Button -->
-            <label for="pdfUpload" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-medium cursor-pointer flex items-center gap-2 transition-all">
-                <i data-lucide="upload"></i>
-                <span>Open PDF</span>
-                <input type="file" id="pdfUpload" accept="application/pdf" class="hidden">
-            </label>
-        </div>
-    </header>
+<div id="translator" class="fixed inset-0 bg-black/70 hidden items-center justify-center p-4 z-50">
+<div class="bg-gray-900 rounded-xl p-5 w-full max-w-3xl">
+<div class="flex justify-between items-center mb-4"><h2 class="text-xl font-bold">🌐 AI Translator</h2><button id="closeTranslator" class="text-2xl">×</button></div>
+<label class="block text-sm text-gray-400 mb-1">Translate to</label>
+<select id="language" class="w-full bg-gray-800 rounded-lg p-2 mb-3"><option>Hindi</option><option>Punjabi</option><option>English</option><option>Spanish</option><option>French</option><option>German</option></select>
+<button id="runTranslate" class="bg-purple-600 hover:bg-purple-500 px-4 py-2 rounded-lg w-full">Translate with Gemini AI</button>
+<p id="translateStatus" class="text-sm text-gray-400 mt-3"></p>
+<textarea id="translation" class="w-full h-80 bg-gray-950 border border-gray-700 rounded-lg p-3 mt-3" placeholder="Translation will appear here..."></textarea>
+</div>
+</div>
 
-    <div class="flex flex-1 overflow-hidden relative">
-        <!-- Sidebar / Chapter List -->
-        <aside id="sidebar" class="w-80 bg-gray-900 border-r border-gray-800 flex flex-col absolute md:relative inset-y-0 left-0 z-10 transform -translate-x-full md:translate-x-0 transition-transform duration-200 ease-in-out">
-            <div class="p-4 border-b border-gray-800 flex justify-between items-center">
-                <span class="text-xs font-bold uppercase tracking-wider text-gray-400">Chapters (<span id="chapterCount">0</span>)</span>
-                <button id="btnCloseSidebar" class="md:hidden text-gray-400 hover:text-white">
-                    <i data-lucide="x"></i>
-                </button>
-            </div>
-            <div id="chapterList" class="flex-1 overflow-y-auto p-2 space-y-1">
-                <div class="text-center text-sm text-gray-500 py-8">Upload a PDF to view chapters</div>
-            </div>
-        </aside>
+<script>
+const pdfjsLibReady = typeof pdfjsLib !== 'undefined';
+if(pdfjsLibReady) pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+const $=id=>document.getElementById(id);
+const state={pdf:null,chapters:[],index:0,text:'',chunks:[],chunk:0,playing:false};
 
-        <!-- Main Content Area -->
-        <main class="flex-1 flex flex-col overflow-hidden bg-gray-950 relative">
-            <div class="flex-1 overflow-y-auto p-6 max-w-4xl mx-auto w-full">
-                <div id="textContainer" class="prose prose-invert max-w-none text-gray-300 leading-relaxed space-y-4 whitespace-pre-wrap">
-                    Select or upload a PDF to begin reading and listening.
-                </div>
-            </div>
+function status(msg){$('status').textContent=msg;}
+function reset(){speechSynthesis.cancel();state.pdf=null;state.chapters=[];state.index=0;state.text='';state.chunks=[];state.chunk=0;state.playing=false;$('chapters').innerHTML='';$('count').textContent='0';$('text').textContent='Select a PDF to begin reading.';$('chapterTitle').textContent='No PDF Loaded';}
 
-            <!-- Loading Overlay -->
-            <div id="loadingOverlay" class="absolute inset-0 bg-gray-950/80 backdrop-blur-sm flex flex-col items-center justify-center gap-3 z-30 hidden">
-                <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500"></div>
-                <span id="loadingText" class="text-sm text-gray-300">Processing...</span>
-            </div>
-        </main>
-    </div>
+$('openBtn').addEventListener('click',()=>{ $('pdfInput').click(); });
+$('dropZone').addEventListener('click',()=>{ $('pdfInput').click(); });
+$('dropZone').addEventListener('dragover',e=>{e.preventDefault();$('dropZone').classList.add('drag');});
+$('dropZone').addEventListener('dragleave',()=>$('dropZone').classList.remove('drag'));
+$('dropZone').addEventListener('drop',e=>{e.preventDefault();$('dropZone').classList.remove('drag');const f=e.dataTransfer.files[0];if(f) loadPdf(f);});
+$('pdfInput').addEventListener('change',e=>{const f=e.target.files&&e.target.files[0];if(f) loadPdf(f);e.target.value='';});
 
-    <!-- Sticky Audio Player Bar -->
-    <footer class="bg-gray-900 border-t border-gray-800 p-4 sticky bottom-0 z-20 flex flex-col md:flex-row items-center justify-between gap-4">
-        <div class="flex items-center gap-3 w-full md:w-auto">
-            <div class="text-sm">
-                <p id="playerTitle" class="font-medium text-gray-200 truncate max-w-xs">No track active</p>
-                <p class="text-xs text-gray-500">Page <span id="currentPageNum">-</span></p>
-            </div>
-        </div>
+async function readFile(file){
+ if(file.type!=='application/pdf'&&!/\.pdf$/i.test(file.name||'')) throw new Error('Please select a PDF file.');
+ if(typeof file.arrayBuffer==='function') return new Uint8Array(await file.arrayBuffer());
+ return new Uint8Array(await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=()=>reject(r.error||new Error('Could not read file'));r.readAsArrayBuffer(file);}));
+}
 
-        <!-- Controls -->
-        <div class="flex items-center gap-4">
-            <button id="btnPrevChapter" class="p-2 hover:bg-gray-800 text-gray-300 rounded-full">
-                <i data-lucide="skip-back"></i>
-            </button>
-            <button id="btnPlay" class="p-3 bg-blue-600 hover:bg-blue-500 text-white rounded-full shadow-lg transition-transform active:scale-95">
-                <i data-lucide="play"></i>
-            </button>
-            <button id="btnNextChapter" class="p-2 hover:bg-gray-800 text-gray-300 rounded-full">
-                <i data-lucide="skip-forward"></i>
-            </button>
-        </div>
+async function loadPdf(file){
+ reset();$('fileName').textContent=file.name;status('Reading PDF...');
+ try{
+  if(!pdfjsLibReady) throw new Error('PDF.js did not load. Refresh the page and try again.');
+  const data=await readFile(file); if(!data.length) throw new Error('The PDF is empty.');
+  state.pdf=await pdfjsLib.getDocument({data}).promise;status(`PDF loaded: ${state.pdf.numPages} pages. Reading chapters...`);
+  let outline=[];try{outline=await state.pdf.getOutline()||[];}catch(e){console.warn(e);}
+  state.chapters=[];
+  for(let i=0;i<outline.length;i++){
+   let page=0;try{let d=outline[i].dest;if(typeof d==='string')d=await state.pdf.getDestination(d);if(Array.isArray(d))page=await state.pdf.getPageIndex(d[0]);}catch(e){}
+   state.chapters.push({title:outline[i].title||`Chapter ${i+1}`,start:page,end:state.pdf.numPages-1});
+  }
+  if(!state.chapters.length){for(let p=0;p<state.pdf.numPages;p+=5)state.chapters.push({title:`Pages ${p+1}-${Math.min(p+5,state.pdf.numPages)}`,start:p,end:Math.min(p+4,state.pdf.numPages-1)});}
+  for(let i=0;i<state.chapters.length-1;i++)state.chapters[i].end=Math.max(state.chapters[i].start,state.chapters[i+1].start-1);
+  renderChapters();await openChapter(0);status('PDF ready.');
+ }catch(e){console.error(e);status('ERROR: '+e.message);$('text').textContent='Could not load this PDF. '+e.message;}
+}
 
-        <!-- Settings (Rate/Voice) -->
-        <div class="flex items-center gap-3 w-full md:w-auto justify-end">
-            <select id="rateSelect" class="bg-gray-800 border border-gray-700 text-xs rounded-lg p-2 text-gray-300 outline-none">
-                <option value="0.75">0.75x</option>
-                <option value="1" selected>1.0x</option>
-                <option value="1.25">1.25x</option>
-                <option value="1.5">1.5x</option>
-                <option value="2">2.0x</option>
-            </select>
-            <select id="voiceSelect" class="bg-gray-800 border border-gray-700 text-xs rounded-lg p-2 text-gray-300 outline-none max-w-[150px] truncate">
-                <option value="">Default Voice</option>
-            </select>
-        </div>
-    </footer>
+function renderChapters(){$('count').textContent=state.chapters.length;$('chapters').innerHTML='';state.chapters.forEach((c,i)=>{const b=document.createElement('button');b.className='chapter w-full text-left p-3 rounded-lg hover:bg-gray-800';b.textContent=c.title;b.onclick=()=>openChapter(i);$('chapters').appendChild(b);});highlight();}
+function highlight(){[...$('chapters').children].forEach((b,i)=>b.classList.toggle('active',i===state.index));}
+async function openChapter(i){if(!state.pdf||!state.chapters[i])return;state.index=i;highlight();const c=state.chapters[i];$('chapterTitle').textContent=c.title;status('Extracting text...');let out='';try{for(let p=c.start;p<=c.end;p++){const page=await state.pdf.getPage(p+1);const content=await page.getTextContent();out+=content.items.map(x=>x.str).join(' ')+'\n\n';}state.text=out.trim();$('text').textContent=state.text||'No extractable text found in this chapter.';state.chunks=state.text.match(/[^.!?]+[.!?]+/g)||[state.text];state.chunk=0;status(`Chapter ${i+1} of ${state.chapters.length}`);}catch(e){status('Text extraction error: '+e.message);}}
+$('prev').onclick=()=>{if(state.index>0)openChapter(state.index-1)};$('next').onclick=()=>{if(state.index<state.chapters.length-1)openChapter(state.index+1)};
+$('play').onclick=()=>{if(!state.chunks.length)return;if(state.playing){speechSynthesis.cancel();state.playing=false;$('play').textContent='▶ Play';return;}state.playing=true;$('play').textContent='⏸ Pause';speak();};
+function speak(){if(!state.playing||state.chunk>=state.chunks.length){state.playing=false;$('play').textContent='▶ Play';return;}const u=new SpeechSynthesisUtterance(state.chunks[state.chunk++]);u.onend=speak;u.onerror=()=>{state.playing=false;$('play').textContent='▶ Play';};speechSynthesis.speak(u);}
 
-    <!-- Application Script -->
-    <script>
-        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-
-        const STATE = {
-            pdfDoc: null,
-            chapters: [],
-            currentChapterIndex: 0,
-            isPlaying: false,
-            utterance: null,
-            textChunks: [],
-            currentChunkIndex: 0,
-            speechRate: 1,
-            selectedVoice: null
-        };
-
-        const SELECTORS = {
-            pdfUpload: document.getElementById('pdfUpload'),
-            sidebar: document.getElementById('sidebar'),
-            btnToggleSidebar: document.getElementById('btnToggleSidebar'),
-            btnCloseSidebar: document.getElementById('btnCloseSidebar'),
-            chapterList: document.getElementById('chapterList'),
-            chapterCount: document.getElementById('chapterCount'),
-            textContainer: document.getElementById('textContainer'),
-            currentChapterTitle: document.getElementById('currentChapterTitle'),
-            playerTitle: document.getElementById('playerTitle'),
-            currentPageNum: document.getElementById('currentPageNum'),
-            btnPlay: document.getElementById('btnPlay'),
-            btnPrevChapter: document.getElementById('btnPrevChapter'),
-            btnNextChapter: document.getElementById('btnNextChapter'),
-            loadingOverlay: document.getElementById('loadingOverlay'),
-            loadingText: document.getElementById('loadingText'),
-            rateSelect: document.getElementById('rateSelect'),
-            voiceSelect: document.getElementById('voiceSelect')
-        };
-
-        // Initialize Lucide icons
-        lucide.createIcons();
-
-        // Populate TTS Voices
-        function populateVoices() {
-            const voices = window.speechSynthesis.getVoices();
-            SELECTORS.voiceSelect.innerHTML = '<option value="">Default Voice</option>';
-            voices.forEach(v => {
-                const opt = document.createElement('option');
-                opt.value = v.name;
-                opt.innerText = `${v.name} (${v.lang})`;
-                SELECTORS.voiceSelect.appendChild(opt);
-            });
-        }
-        populateVoices();
-        if (speechSynthesis.onvoiceschanged !== undefined) {
-            speechSynthesis.onvoiceschanged = populateVoices;
-        }
-
-        // Sidebar Controls
-        function toggleSidebar(show) {
-            if (show) {
-                SELECTORS.sidebar.classList.remove('-translate-x-full');
-            } else {
-                SELECTORS.sidebar.classList.add('-translate-x-full');
-            }
-        }
-        SELECTORS.btnToggleSidebar.onclick = () => toggleSidebar(true);
-        SELECTORS.btnCloseSidebar.onclick = () => toggleSidebar(false);
-
-        // Event Handlers for Player
-        SELECTORS.btnPlay.onclick = () => togglePlay();
-        SELECTORS.btnPrevChapter.onclick = () => skipChapter(-1);
-        SELECTORS.btnNextChapter.onclick = () => skipChapter(1);
-        SELECTORS.rateSelect.onchange = (e) => {
-            STATE.speechRate = parseFloat(e.target.value);
-            if (STATE.isPlaying) {
-                window.speechSynthesis.cancel();
-                speakCurrentChunk();
-            }
-        };
-        SELECTORS.voiceSelect.onchange = (e) => {
-            const voices = window.speechSynthesis.getVoices();
-            STATE.selectedVoice = voices.find(v => v.name === e.target.value) || null;
-            if (STATE.isPlaying) {
-                window.speechSynthesis.cancel();
-                speakCurrentChunk();
-            }
-        };
-
-        // File Upload Handler
-        SELECTORS.pdfUpload.onchange = async (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-
-            resetState();
-            showLoading(true, "Loading PDF file...");
-
-            try {
-                const arrayBuffer = await file.arrayBuffer();
-                STATE.pdfDoc = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-
-                showLoading(true, "Parsing outline...");
-                const outline = await STATE.pdfDoc.getOutline();
-
-                if (outline && outline.length > 0) {
-                    STATE.chapters = await parseOutline(outline, STATE.pdfDoc.numPages);
-                } else {
-                    STATE.chapters = generateFallbackChapters(STATE.pdfDoc.numPages);
-                }
-
-                renderChapterList();
-                if (STATE.chapters.length > 0) {
-                    await loadChapter(0);
-                }
-            } catch (err) {
-                console.error("PDF Processing Error:", err);
-                SELECTORS.textContainer.innerText = "Failed to load PDF file.";
-            } finally {
-                showLoading(false);
-            }
-        };
-
-        async function parseOutline(outline, totalPages) {
-            const chapters = [];
-            for (let i = 0; i < outline.length; i++) {
-                const item = outline[i];
-                let pageNum = 0;
-
-                if (typeof item.dest === 'string') {
-                    const dest = await STATE.pdfDoc.getDestination(item.dest);
-                    if (dest) pageNum = await STATE.pdfDoc.getPageIndex(dest[0]);
-                } else if (Array.isArray(item.dest)) {
-                    pageNum = await STATE.pdfDoc.getPageIndex(item.dest[0]);
-                }
-
-                chapters.push({
-                    title: item.title || `Section ${i + 1}`,
-                    startPage: pageNum,
-                    endPage: totalPages - 1
-                });
-            }
-
-            for (let i = 0; i < chapters.length - 1; i++) {
-                chapters[i].endPage = chapters[i + 1].startPage - 1;
-            }
-            return chapters;
-        }
-
-        function generateFallbackChapters(totalPages) {
-            const chapters = [];
-            const pagesPerChapter = 5;
-            for (let i = 0; i < totalPages; i += pagesPerChapter) {
-                const end = Math.min(i + pagesPerChapter - 1, totalPages - 1);
-                chapters.push({
-                    title: `Pages ${i + 1} - ${end + 1}`,
-                    startPage: i,
-                    endPage: end
-                });
-            }
-            return chapters;
-        }
-
-        function chunkTextForSpeaking(text) {
-            return text.match(/[^.!?]+[.!?]+/g) || [text];
-        }
-
-        function speakCurrentChunk() {
-            if (!STATE.textChunks.length || STATE.currentChunkIndex >= STATE.textChunks.length) {
-                STATE.isPlaying = false;
-                updatePlayBtn();
-                return;
-            }
-
-            const chunk = STATE.textChunks[STATE.currentChunkIndex];
-            const utterance = new SpeechSynthesisUtterance(chunk);
-            utterance.rate = STATE.speechRate;
-            if (STATE.selectedVoice) utterance.voice = STATE.selectedVoice;
-
-            utterance.onend = () => {
-                if (STATE.isPlaying) {
-                    STATE.currentChunkIndex++;
-                    speakCurrentChunk();
-                }
-            };
-
-            utterance.onerror = (e) => {
-                console.error("TTS Error", e);
-                STATE.isPlaying = false;
-                updatePlayBtn();
-            };
-
-            STATE.utterance = utterance;
-            window.speechSynthesis.speak(utterance);
-        }
-
-        function togglePlay() {
-            if (!STATE.textChunks.length) return;
-
-            if (STATE.isPlaying) {
-                window.speechSynthesis.cancel();
-                STATE.isPlaying = false;
-            } else {
-                STATE.isPlaying = true;
-                if (window.speechSynthesis.paused) {
-                    window.speechSynthesis.resume();
-                } else {
-                    speakCurrentChunk();
-                }
-            }
-            updatePlayBtn();
-        }
-
-        function updatePlayBtn() {
-            const icon = SELECTORS.btnPlay.querySelector('i');
-            if (STATE.isPlaying) {
-                icon.setAttribute('data-lucide', 'pause');
-            } else {
-                icon.setAttribute('data-lucide', 'play');
-            }
-            lucide.createIcons();
-        }
-
-        async function loadChapter(index) {
-            if (index < 0 || index >= STATE.chapters.length) return;
-
-            window.speechSynthesis.cancel();
-            STATE.isPlaying = false;
-            updatePlayBtn();
-
-            STATE.currentChapterIndex = index;
-            const ch = STATE.chapters[index];
-
-            SELECTORS.currentChapterTitle.innerText = ch.title;
-            SELECTORS.playerTitle.innerText = ch.title;
-            SELECTORS.currentPageNum.innerText = `${ch.startPage + 1} - ${ch.endPage + 1}`;
-
-            highlightActiveChapter(index);
-
-            showLoading(true, "Extracting text...");
-            try {
-                let fullText = "";
-                for (let i = ch.startPage; i <= ch.endPage; i++) {
-                    const page = await STATE.pdfDoc.getPage(i + 1);
-                    const content = await page.getTextContent();
-                    const text = content.items.map(s => s.str).join(' ');
-                    fullText += text + "\n\n";
-                }
-
-                SELECTORS.textContainer.innerText = fullText.trim() || "No extractable text found in this chapter.";
-                STATE.textChunks = chunkTextForSpeaking(fullText);
-                STATE.currentChunkIndex = 0;
-            } catch (err) {
-                console.error("Error extracting text", err);
-                SELECTORS.textContainer.innerText = "Error loading chapter text.";
-            } finally {
-                showLoading(false);
-            }
-        }
-
-        function skipChapter(direction) {
-            const newIndex = STATE.currentChapterIndex + direction;
-            if (newIndex >= 0 && newIndex < STATE.chapters.length) {
-                loadChapter(newIndex);
-            }
-        }
-
-        function renderChapterList() {
-            SELECTORS.chapterList.innerHTML = "";
-            SELECTORS.chapterCount.innerText = STATE.chapters.length;
-
-            STATE.chapters.forEach((ch, idx) => {
-                const btn = document.createElement('button');
-                btn.className = `w-full text-left p-3 rounded-lg text-sm transition-all flex flex-col gap-1 border-b border-gray-800/50 hover:bg-gray-800/50 cursor-pointer ${idx === 0 ? 'active-chapter' : ''}`;
-                btn.innerHTML = `
-                    <div class="font-medium text-gray-200 truncate">${ch.title}</div>
-                    <div class="text-xs text-gray-500">Page ${ch.startPage + 1} - ${ch.endPage + 1}</div>
-                `;
-                btn.onclick = () => {
-                    loadChapter(idx);
-                    if (window.innerWidth < 768) toggleSidebar(false);
-                };
-                SELECTORS.chapterList.appendChild(btn);
-            });
-        }
-
-        function highlightActiveChapter(index) {
-            const children = SELECTORS.chapterList.children;
-            for (let i = 0; i < children.length; i++) {
-                if (i === index) {
-                    children[i].classList.add('active-chapter');
-                } else {
-                    children[i].classList.remove('active-chapter');
-                }
-            }
-        }
-
-        function resetState() {
-            window.speechSynthesis.cancel();
-            STATE.pdfDoc = null;
-            STATE.chapters = [];
-            STATE.currentChapterIndex = 0;
-            STATE.isPlaying = false;
-            STATE.textChunks = [];
-            STATE.currentChunkIndex = 0;
-            updatePlayBtn();
-        }
-
-        function showLoading(show, text = "Loading...") {
-            if (show) {
-                SELECTORS.loadingText.innerText = text;
-                SELECTORS.loadingOverlay.classList.remove('hidden');
-            } else {
-                SELECTORS.loadingOverlay.classList.add('hidden');
-            }
-        }
-    </script>
+$('translateBtn').onclick=()=>{$('translator').classList.remove('hidden');$('translator').classList.add('flex');};$('closeTranslator').onclick=()=>{$('translator').classList.add('hidden');$('translator').classList.remove('flex');};
+$('runTranslate').onclick=async()=>{
+ if(!state.text){$('translateStatus').textContent='Upload a PDF and open a chapter first.';return;}
+ let key=localStorage.getItem('pdfNarratorGeminiKey')||prompt('Enter your Gemini API key. It will be stored only in this browser.');if(!key)return;key=key.trim();localStorage.setItem('pdfNarratorGeminiKey',key);
+ const lang=$('language').value;$('translateStatus').textContent='Translating...';$('translation').value='';
+ try{const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent',{method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':key},body:JSON.stringify({contents:[{parts:[{text:`Translate the following text into ${lang}. Preserve the meaning. Return only the translation.\n\n${state.text}`}]}]})});const d=await r.json();if(!r.ok||d.error)throw new Error(d?.error?.message||`HTTP ${r.status}`);const out=d?.candidates?.[0]?.content?.parts?.map(x=>x.text||'').join('').trim();if(!out)throw new Error('Gemini returned no translation.');$('translation').value=out;$('translateStatus').textContent='Translation complete.';}catch(e){console.error(e);$('translateStatus').textContent='Translation failed: '+e.message;}}
+</script>
 </body>
-
 </html>
