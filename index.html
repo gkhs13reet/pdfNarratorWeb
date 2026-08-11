@@ -19,6 +19,7 @@
   <h1 class="text-xl font-bold">📖 PDF Narrator V2</h1>
   <div class="flex flex-wrap gap-2">
     <button id="openBtn" class="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded-lg">📄 Open PDF</button>
+    <button id="translatorBtn" class="bg-emerald-700 hover:bg-emerald-600 px-4 py-2 rounded-lg">🌐 Voice Translator</button>
     <button id="aiBtn" class="bg-purple-600 hover:bg-purple-500 px-4 py-2 rounded-lg">✨ AI Tools</button>
     <button id="settingsBtn" class="bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded-lg">⚙ Settings</button>
     <input id="pdfInput" type="file" accept=".pdf,application/pdf" class="hidden">
@@ -43,7 +44,19 @@
     </div>
 
     <div id="status" class="text-sm text-gray-400 mb-3">No PDF loaded.</div>
-    <h2 id="chapterTitle" class="text-2xl font-bold mb-3">No PDF Loaded</h2>
+    <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+      <h2 id="chapterTitle" class="text-2xl font-bold">No PDF Loaded</h2>
+      <span id="pageIndicator" class="text-sm bg-gray-800 px-3 py-1 rounded-full">Page 0 / 0</span>
+    </div>
+
+    <div class="flex flex-wrap gap-2 mb-4">
+      <button id="prevPage" class="bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded-lg">← Previous Page</button>
+      <button id="nextPage" class="bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded-lg">Next Page →</button>
+      <button id="translatePageEnPa" class="bg-emerald-800 hover:bg-emerald-700 px-4 py-2 rounded-lg">English → Punjabi</button>
+      <button id="translatePageEnHi" class="bg-amber-800 hover:bg-amber-700 px-4 py-2 rounded-lg">English → Hindi</button>
+      <button id="translatePagePaEn" class="bg-sky-800 hover:bg-sky-700 px-4 py-2 rounded-lg">Punjabi → English</button>
+    </div>
+
     <div id="text" class="reader whitespace-pre-wrap leading-8 text-gray-300 select-text">Select a PDF to begin reading.</div>
 
     <div class="mt-6 border-t border-gray-800 pt-4 space-y-3">
@@ -68,6 +81,48 @@
     </div>
   </section>
 </main>
+
+
+<!-- Voice Translator modal -->
+<div id="translatorModal" class="fixed inset-0 bg-black/70 hidden items-center justify-center p-4 z-50">
+  <div class="bg-gray-900 rounded-xl p-5 w-full max-w-3xl max-h-[90vh] overflow-auto">
+    <div class="flex justify-between items-center mb-4">
+      <h2 class="text-xl font-bold">🌐 Voice Translator</h2>
+      <button id="closeTranslator" class="text-2xl">×</button>
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-4 mb-4">
+      <label class="text-sm">From
+        <select id="voiceFrom" class="mt-1 w-full bg-gray-800 border border-gray-700 rounded-lg p-2">
+          <option value="en-US">English</option>
+          <option value="pa-IN">Punjabi</option>
+          <option value="hi-IN">Hindi</option>
+        </select>
+      </label>
+      <label class="text-sm">To
+        <select id="voiceTo" class="mt-1 w-full bg-gray-800 border border-gray-700 rounded-lg p-2">
+          <option value="pa-IN">Punjabi</option>
+          <option value="hi-IN">Hindi</option>
+          <option value="en-US">English</option>
+        </select>
+      </label>
+    </div>
+
+    <div class="flex flex-wrap gap-2 mb-3">
+      <button id="startListening" class="bg-red-700 hover:bg-red-600 px-4 py-2 rounded-lg">🎙 Start Speaking</button>
+      <button id="translateVoiceText" class="bg-emerald-700 hover:bg-emerald-600 px-4 py-2 rounded-lg">Translate Text</button>
+      <button id="speakTranslated" class="bg-blue-700 hover:bg-blue-600 px-4 py-2 rounded-lg">🔊 Speak Translation</button>
+    </div>
+
+    <p id="voiceStatus" class="text-sm text-gray-400 mb-3">Ready.</p>
+
+    <label class="block text-sm mb-1">Recognized / source text</label>
+    <textarea id="voiceInput" class="w-full h-36 bg-gray-950 border border-gray-700 rounded-lg p-3 mb-4" placeholder="Speak or type English, Punjabi, or Hindi..."></textarea>
+
+    <label class="block text-sm mb-1">Translation</label>
+    <textarea id="voiceOutput" class="w-full h-36 bg-gray-950 border border-gray-700 rounded-lg p-3" placeholder="Translation appears here..."></textarea>
+  </div>
+</div>
 
 <!-- AI modal -->
 <div id="aiModal" class="fixed inset-0 bg-black/70 hidden items-center justify-center p-4 z-50">
@@ -122,7 +177,8 @@ if(typeof pdfjsLib!=='undefined'){
 const $=id=>document.getElementById(id);
 const state={
   pdf:null, chapters:[], index:0, text:'', chunks:[], chunk:0,
-  playing:false, paused:false, utterance:null, voices:[], selectedText:''
+  playing:false, paused:false, utterance:null, voices:[], selectedText:'',
+  currentPage:0, pageText:'', recognition:null
 };
 
 function setStatus(msg){$('status').textContent=msg;}
@@ -141,9 +197,11 @@ function stopSpeech(resetChunk=false){
 function reset(){
   stopSpeech(true);
   state.pdf=null; state.chapters=[]; state.index=0; state.text=''; state.chunks=[];
+  state.currentPage=0; state.pageText='';
   $('chapters').innerHTML=''; $('count').textContent='0';
   $('text').textContent='Select a PDF to begin reading.';
   $('chapterTitle').textContent='No PDF Loaded';
+  $('pageIndicator').textContent='Page 0 / 0';
 }
 function cleanText(s){
   return s.replace(/\s+/g,' ').replace(/\s+([,.;:!?])/g,'$1').trim();
@@ -243,6 +301,23 @@ function normalizeChapterRanges(chapters){
   }
   return sorted;
 }
+
+async function openPage(pageIndex){
+  if(!state.pdf) return;
+  pageIndex=Math.max(0,Math.min(state.pdf.numPages-1,pageIndex));
+  stopSpeech(true);
+  state.currentPage=pageIndex;
+  state.pageText=await extractPageText(pageIndex);
+  state.text=state.pageText;
+  state.chunks=segmentText(state.text);
+  state.chunk=0;
+  $('text').textContent=state.text||'No extractable text found on this page.';
+  $('chapterTitle').textContent=`Page ${pageIndex+1}`;
+  $('pageIndicator').textContent=`Page ${pageIndex+1} / ${state.pdf.numPages}`;
+  setStatus(`Showing page ${pageIndex+1} of ${state.pdf.numPages}`);
+  updatePlayer();
+}
+
 async function loadPdf(file){
   reset(); $('fileName').textContent=file.name; setStatus('Reading PDF...');
   try{
@@ -267,8 +342,8 @@ async function loadPdf(file){
 
     state.chapters=normalizeChapterRanges(chapters);
     renderChapters();
-    await openChapter(0);
-    setStatus(`PDF ready. ${state.chapters.length} chapter${state.chapters.length===1?'':'s'} detected.`);
+    await openPage(0);
+    setStatus(`PDF ready. ${state.pdf.numPages} pages • ${state.chapters.length} chapter${state.chapters.length===1?'':'s'} detected.`);
   }catch(e){
     console.error(e); setStatus('ERROR: '+e.message);
     $('text').textContent='Could not load this PDF. '+e.message;
@@ -280,7 +355,7 @@ function renderChapters(){
     const b=document.createElement('button');
     b.className='chapter w-full text-left p-3 rounded-lg hover:bg-gray-800';
     b.style.paddingLeft=`${12+Math.min(c.depth||0,3)*14}px`;
-    b.textContent=c.title; b.onclick=()=>openChapter(i);
+    b.textContent=c.title; b.onclick=()=>{state.index=i; highlight(); openPage(c.start);};
     $('chapters').appendChild(b);
   });
   highlight();
@@ -290,19 +365,33 @@ function highlight(){
 }
 async function openChapter(i){
   if(!state.pdf||!state.chapters[i]) return;
-  stopSpeech(true); state.index=i; highlight();
-  const c=state.chapters[i]; $('chapterTitle').textContent=c.title;
-  setStatus('Extracting text...');
-  try{
-    const pages=[];
-    for(let p=c.start;p<=c.end;p++) pages.push(await extractPageText(p));
-    state.text=pages.filter(Boolean).join('\n\n').trim();
-    $('text').textContent=state.text||'No extractable text found in this chapter.';
-    state.chunks=segmentText(state.text);
-    state.chunk=0; updatePlayer();
-    setStatus(`Chapter ${i+1} of ${state.chapters.length} • pages ${c.start+1}-${c.end+1}`);
-  }catch(e){setStatus('Text extraction error: '+e.message);}
+  state.index=i;
+  highlight();
+  await openPage(state.chapters[i].start);
 }
+
+
+$('prevPage').onclick=()=>{ if(state.pdf) openPage(state.currentPage-1); };
+$('nextPage').onclick=()=>{ if(state.pdf) openPage(state.currentPage+1); };
+
+async function translateCurrentPage(targetLang){
+  if(!state.pageText){setStatus('Open a PDF page first.');return;}
+  try{
+    setStatus('Translating current page...');
+    const out=await gemini(`Translate the following text into ${targetLang}. Preserve technical meaning, names, numbers, equations, and structure. Return only the translation:\n\n${state.pageText}`);
+    $('text').textContent=out;
+    state.text=out;
+    state.chunks=segmentText(out);
+    state.chunk=0;
+    setStatus(`Page ${state.currentPage+1} translated to ${targetLang}.`);
+    updatePlayer();
+  }catch(e){
+    setStatus('Translation error: '+e.message);
+  }
+}
+$('translatePageEnPa').onclick=()=>translateCurrentPage('Punjabi (Gurmukhi)');
+$('translatePageEnHi').onclick=()=>translateCurrentPage('Hindi (Devanagari)');
+$('translatePagePaEn').onclick=()=>translateCurrentPage('English');
 
 $('prev').onclick=()=>{if(state.index>0)openChapter(state.index-1);};
 $('next').onclick=()=>{if(state.index<state.chapters.length-1)openChapter(state.index+1);};
@@ -355,6 +444,88 @@ document.addEventListener('selectionchange',()=>{
   if(txt && $('text').contains(sel.anchorNode)) state.selectedText=txt;
 });
 
+
+// Voice translator
+$('translatorBtn').onclick=()=>showModal('translatorModal');
+$('closeTranslator').onclick=()=>hideModal('translatorModal');
+
+function languageName(tag){
+  return {'en-US':'English','pa-IN':'Punjabi (Gurmukhi)','hi-IN':'Hindi'}[tag]||tag;
+}
+function bestVoiceFor(lang){
+  const exact=state.voices.find(v=>v.lang.toLowerCase()===lang.toLowerCase());
+  if(exact) return exact;
+  const base=lang.split('-')[0].toLowerCase();
+  return state.voices.find(v=>v.lang.toLowerCase().startsWith(base)) || null;
+}
+async function translateVoiceInput(){
+  const text=$('voiceInput').value.trim();
+  if(!text){$('voiceStatus').textContent='Speak or type some text first.';return;}
+  const target=$('voiceTo').value;
+  $('voiceStatus').textContent='Translating...';
+  $('voiceOutput').value='';
+  try{
+    const out=await gemini(
+      `Translate the following ${languageName($('voiceFrom').value)} text into ${languageName(target)}. `+
+      `Preserve names, numbers, technical terms, and meaning. Return only the translation:\n\n${text}`
+    );
+    $('voiceOutput').value=out;
+    $('voiceStatus').textContent='Translation ready.';
+  }catch(e){
+    $('voiceStatus').textContent='Translation error: '+e.message;
+  }
+}
+$('translateVoiceText').onclick=translateVoiceInput;
+
+$('startListening').onclick=()=>{
+  const Recognition=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!Recognition){
+    $('voiceStatus').textContent='Speech recognition is not supported in this browser. Type the text instead.';
+    return;
+  }
+  try{
+    if(state.recognition) state.recognition.abort();
+    const r=new Recognition();
+    state.recognition=r;
+    r.lang=$('voiceFrom').value;
+    r.interimResults=false;
+    r.maxAlternatives=1;
+    $('voiceStatus').textContent='Listening... speak now.';
+    r.onresult=async e=>{
+      const text=e.results?.[0]?.[0]?.transcript||'';
+      $('voiceInput').value=text;
+      $('voiceStatus').textContent='Speech recognized. Translating...';
+      await translateVoiceInput();
+    };
+    r.onerror=e=>{
+      $('voiceStatus').textContent=
+        e.error==='language-not-supported'
+        ? 'This browser does not support microphone recognition for that language. You can still type the text and translate it.'
+        : 'Speech recognition error: '+e.error;
+    };
+    r.onend=()=>{state.recognition=null;};
+    r.start();
+  }catch(e){
+    $('voiceStatus').textContent='Could not start microphone: '+e.message;
+  }
+};
+
+$('speakTranslated').onclick=()=>{
+  const t=$('voiceOutput').value.trim();
+  if(!t){$('voiceStatus').textContent='Translate something first.';return;}
+  speechSynthesis.cancel();
+  const lang=$('voiceTo').value;
+  const u=new SpeechSynthesisUtterance(t);
+  u.lang=lang;
+  const v=bestVoiceFor(lang);
+  if(v) u.voice=v;
+  u.rate=Number($('rate').value)||1;
+  speechSynthesis.speak(u);
+  $('voiceStatus').textContent=v
+    ? `Speaking with ${v.name}.`
+    : `Speaking with the browser's available ${languageName(lang)} voice/fallback.`;
+};
+
 // AI settings
 $('settingsBtn').onclick=()=>{ $('apiKey').value=sessionStorage.getItem('pdfNarratorGeminiKey')||''; showModal('settingsModal'); };
 $('closeSettings').onclick=()=>hideModal('settingsModal');
@@ -378,7 +549,7 @@ $('readAi').onclick=()=>{
 async function gemini(promptText){
   const key=sessionStorage.getItem('pdfNarratorGeminiKey');
   if(!key){hideModal('aiModal');showModal('settingsModal');throw new Error('Add your Gemini API key in Settings first.');}
-  const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent',{
+  const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent',{
     method:'POST',
     headers:{'Content-Type':'application/json','x-goog-api-key':key},
     body:JSON.stringify({contents:[{parts:[{text:promptText}]}]})
