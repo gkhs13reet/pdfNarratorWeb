@@ -3,111 +3,415 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PDF Narrator & AI Translator</title>
+<title>PDF Narrator V2</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <style>
-body{font-family:Arial,sans-serif}.drop{border:2px dashed #4b5563}.drop.drag{border-color:#3b82f6;background:#111827}.chapter.active{background:#1e3a5f}
+  body{font-family:Inter,Arial,sans-serif}
+  .drop{border:2px dashed #4b5563}
+  .drop.drag{border-color:#3b82f6;background:#111827}
+  .chapter.active{background:#1e3a5f}
+  .reader::selection{background:#7c3aed;color:#fff}
 </style>
 </head>
 <body class="bg-gray-950 text-gray-100 min-h-screen">
-<header class="bg-gray-900 border-b border-gray-800 p-4 flex flex-wrap gap-3 items-center justify-between">
-<h1 class="text-xl font-bold">📖 PDF Narrator & AI Translator</h1>
-<div class="flex gap-2">
-<button id="openBtn" type="button" class="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded-lg">📄 Open PDF</button>
-<button id="translateBtn" type="button" class="bg-purple-600 hover:bg-purple-500 px-4 py-2 rounded-lg">🌐 AI Translate</button>
-<input id="pdfInput" type="file" accept=".pdf,application/pdf" style="display:none">
-</div>
+<header class="bg-gray-900 border-b border-gray-800 p-4 flex flex-wrap gap-3 items-center justify-between sticky top-0 z-30">
+  <h1 class="text-xl font-bold">📖 PDF Narrator V2</h1>
+  <div class="flex flex-wrap gap-2">
+    <button id="openBtn" class="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded-lg">📄 Open PDF</button>
+    <button id="aiBtn" class="bg-purple-600 hover:bg-purple-500 px-4 py-2 rounded-lg">✨ AI Tools</button>
+    <button id="settingsBtn" class="bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded-lg">⚙ Settings</button>
+    <input id="pdfInput" type="file" accept=".pdf,application/pdf" class="hidden">
+  </div>
 </header>
 
-<main class="max-w-7xl mx-auto p-4 grid md:grid-cols-[280px_1fr] gap-4">
-<aside class="bg-gray-900 rounded-xl p-3">
-<h2 class="font-bold mb-3">Chapters <span id="count" class="text-gray-400">0</span></h2>
-<div id="chapters" class="space-y-1 max-h-[70vh] overflow-auto"></div>
-</aside>
+<main class="max-w-7xl mx-auto p-4 grid lg:grid-cols-[280px_1fr] gap-4">
+  <aside class="bg-gray-900 rounded-xl p-3 h-fit lg:sticky lg:top-24">
+    <div class="flex justify-between items-center mb-3">
+      <h2 class="font-bold">Chapters</h2>
+      <span id="count" class="text-gray-400">0</span>
+    </div>
+    <div id="chapters" class="space-y-1 max-h-[70vh] overflow-auto"></div>
+  </aside>
 
-<section class="bg-gray-900 rounded-xl p-4 min-h-[70vh]">
-<div id="dropZone" class="drop rounded-xl p-8 text-center mb-4 cursor-pointer">
-<div class="text-5xl mb-3">📄</div>
-<h2 class="text-xl font-bold">Upload a PDF file</h2>
-<p class="text-gray-400 mt-2">Click here or click <b>Open PDF</b>, or drag and drop a PDF.</p>
-<p id="fileName" class="text-blue-400 mt-3"></p>
-</div>
-<div id="status" class="text-sm text-gray-400 mb-3">No PDF loaded.</div>
-<h2 id="chapterTitle" class="text-xl font-bold mb-3">No PDF Loaded</h2>
-<div id="text" class="whitespace-pre-wrap leading-7 text-gray-300">Select a PDF to begin reading.</div>
-<div class="mt-6 flex gap-2">
-<button id="prev" class="bg-gray-800 px-4 py-2 rounded-lg">← Previous</button>
-<button id="play" class="bg-blue-600 px-4 py-2 rounded-lg">▶ Play</button>
-<button id="next" class="bg-gray-800 px-4 py-2 rounded-lg">Next →</button>
-</div>
-</section>
+  <section class="bg-gray-900 rounded-xl p-4 min-h-[75vh]">
+    <div id="dropZone" class="drop rounded-xl p-7 text-center mb-4 cursor-pointer">
+      <div class="text-5xl mb-2">📄</div>
+      <h2 class="text-xl font-bold">Upload a PDF file</h2>
+      <p class="text-gray-400 mt-2">Click here, use Open PDF, or drag and drop a PDF.</p>
+      <p id="fileName" class="text-blue-400 mt-3"></p>
+    </div>
+
+    <div id="status" class="text-sm text-gray-400 mb-3">No PDF loaded.</div>
+    <h2 id="chapterTitle" class="text-2xl font-bold mb-3">No PDF Loaded</h2>
+    <div id="text" class="reader whitespace-pre-wrap leading-8 text-gray-300 select-text">Select a PDF to begin reading.</div>
+
+    <div class="mt-6 border-t border-gray-800 pt-4 space-y-3">
+      <div class="flex flex-wrap gap-2 items-center">
+        <button id="prev" class="bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded-lg">← Previous</button>
+        <button id="back" class="bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded-lg">⏪ Sentence</button>
+        <button id="play" class="bg-blue-600 hover:bg-blue-500 px-5 py-2 rounded-lg font-semibold">▶ Play</button>
+        <button id="forward" class="bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded-lg">Sentence ⏩</button>
+        <button id="next" class="bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded-lg">Next →</button>
+        <button id="stop" class="bg-red-900 hover:bg-red-800 px-4 py-2 rounded-lg">■ Stop</button>
+      </div>
+
+      <div class="grid md:grid-cols-2 gap-3">
+        <label class="text-sm">Voice
+          <select id="voice" class="mt-1 w-full bg-gray-800 border border-gray-700 rounded-lg p-2"></select>
+        </label>
+        <label class="text-sm">Speed: <span id="rateLabel">1.00×</span>
+          <input id="rate" type="range" min="0.75" max="2" step="0.05" value="1" class="mt-2 w-full">
+        </label>
+      </div>
+      <div class="text-xs text-gray-500">Sentence <span id="progress">0 / 0</span></div>
+    </div>
+  </section>
 </main>
 
-<div id="translator" class="fixed inset-0 bg-black/70 hidden items-center justify-center p-4 z-50">
-<div class="bg-gray-900 rounded-xl p-5 w-full max-w-3xl">
-<div class="flex justify-between items-center mb-4"><h2 class="text-xl font-bold">🌐 AI Translator</h2><button id="closeTranslator" class="text-2xl">×</button></div>
-<label class="block text-sm text-gray-400 mb-1">Translate to</label>
-<select id="language" class="w-full bg-gray-800 rounded-lg p-2 mb-3"><option>Hindi</option><option>Punjabi</option><option>English</option><option>Spanish</option><option>French</option><option>German</option></select>
-<button id="runTranslate" class="bg-purple-600 hover:bg-purple-500 px-4 py-2 rounded-lg w-full">Translate with Gemini AI</button>
-<p id="translateStatus" class="text-sm text-gray-400 mt-3"></p>
-<textarea id="translation" class="w-full h-80 bg-gray-950 border border-gray-700 rounded-lg p-3 mt-3" placeholder="Translation will appear here..."></textarea>
+<!-- AI modal -->
+<div id="aiModal" class="fixed inset-0 bg-black/70 hidden items-center justify-center p-4 z-50">
+  <div class="bg-gray-900 rounded-xl p-5 w-full max-w-3xl max-h-[90vh] overflow-auto">
+    <div class="flex justify-between items-center mb-4">
+      <h2 class="text-xl font-bold">✨ AI Tools</h2>
+      <button id="closeAi" class="text-2xl">×</button>
+    </div>
+    <p class="text-sm text-gray-400 mb-3">Select text in the reader first, or the current chapter will be used.</p>
+    <div class="grid sm:grid-cols-2 md:grid-cols-3 gap-2 mb-3">
+      <button data-ai="explain" class="aiAction bg-purple-700 p-2 rounded-lg">Explain</button>
+      <button data-ai="simple" class="aiAction bg-purple-700 p-2 rounded-lg">Explain Simply</button>
+      <button data-ai="summary" class="aiAction bg-purple-700 p-2 rounded-lg">Summarize</button>
+      <button data-ai="vocab" class="aiAction bg-purple-700 p-2 rounded-lg">Vocabulary</button>
+      <button data-ai="translate" class="aiAction bg-purple-700 p-2 rounded-lg">Translate</button>
+      <button id="readAi" class="bg-blue-700 p-2 rounded-lg">🔊 Read Result</button>
+    </div>
+    <div id="translateOptions" class="hidden mb-3">
+      <label class="text-sm text-gray-400">Translate to</label>
+      <select id="language" class="w-full bg-gray-800 rounded-lg p-2 mt-1">
+        <option>Punjabi</option><option>Hindi</option><option>English</option>
+        <option>Spanish</option><option>French</option><option>German</option>
+      </select>
+    </div>
+    <p id="aiStatus" class="text-sm text-gray-400 mb-2"></p>
+    <textarea id="aiOutput" class="w-full h-80 bg-gray-950 border border-gray-700 rounded-lg p-3" placeholder="AI result will appear here..."></textarea>
+  </div>
 </div>
+
+<!-- Settings modal -->
+<div id="settingsModal" class="fixed inset-0 bg-black/70 hidden items-center justify-center p-4 z-50">
+  <div class="bg-gray-900 rounded-xl p-5 w-full max-w-xl">
+    <div class="flex justify-between items-center mb-4">
+      <h2 class="text-xl font-bold">⚙ Settings</h2>
+      <button id="closeSettings" class="text-2xl">×</button>
+    </div>
+    <label class="block text-sm mb-1">Gemini API key</label>
+    <input id="apiKey" type="password" autocomplete="off" class="w-full bg-gray-800 border border-gray-700 rounded-lg p-2" placeholder="Paste Gemini API key">
+    <p class="text-xs text-gray-500 mt-2">Stored only for this browser tab/session by default.</p>
+    <div class="flex flex-wrap gap-2 mt-4">
+      <button id="saveKey" class="bg-blue-600 px-4 py-2 rounded-lg">Save for session</button>
+      <button id="forgetKey" class="bg-red-900 px-4 py-2 rounded-lg">Forget key</button>
+    </div>
+  </div>
 </div>
 
 <script>
-const pdfjsLibReady = typeof pdfjsLib !== 'undefined';
-if(pdfjsLibReady) pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+const PDFJS_VERSION='3.11.174';
+if(typeof pdfjsLib!=='undefined'){
+  pdfjsLib.GlobalWorkerOptions.workerSrc=`https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDFJS_VERSION}/pdf.worker.min.js`;
+}
 const $=id=>document.getElementById(id);
-const state={pdf:null,chapters:[],index:0,text:'',chunks:[],chunk:0,playing:false};
+const state={
+  pdf:null, chapters:[], index:0, text:'', chunks:[], chunk:0,
+  playing:false, paused:false, utterance:null, voices:[], selectedText:''
+};
 
-function status(msg){$('status').textContent=msg;}
-function reset(){speechSynthesis.cancel();state.pdf=null;state.chapters=[];state.index=0;state.text='';state.chunks=[];state.chunk=0;state.playing=false;$('chapters').innerHTML='';$('count').textContent='0';$('text').textContent='Select a PDF to begin reading.';$('chapterTitle').textContent='No PDF Loaded';}
+function setStatus(msg){$('status').textContent=msg;}
+function showModal(id){$(id).classList.remove('hidden');$(id).classList.add('flex');}
+function hideModal(id){$(id).classList.add('hidden');$(id).classList.remove('flex');}
+function updatePlayer(){
+  $('play').textContent=state.paused?'▶ Resume':state.playing?'⏸ Pause':'▶ Play';
+  $('progress').textContent=`${Math.min(state.chunk+1,state.chunks.length||0)} / ${state.chunks.length}`;
+}
+function stopSpeech(resetChunk=false){
+  speechSynthesis.cancel();
+  state.playing=false; state.paused=false; state.utterance=null;
+  if(resetChunk) state.chunk=0;
+  updatePlayer();
+}
+function reset(){
+  stopSpeech(true);
+  state.pdf=null; state.chapters=[]; state.index=0; state.text=''; state.chunks=[];
+  $('chapters').innerHTML=''; $('count').textContent='0';
+  $('text').textContent='Select a PDF to begin reading.';
+  $('chapterTitle').textContent='No PDF Loaded';
+}
+function cleanText(s){
+  return s.replace(/\s+/g,' ').replace(/\s+([,.;:!?])/g,'$1').trim();
+}
+function segmentText(text){
+  if(!text) return [];
+  try{
+    if('Segmenter' in Intl){
+      const seg=new Intl.Segmenter('en',{granularity:'sentence'});
+      return [...seg.segment(text)].map(x=>x.segment.trim()).filter(Boolean);
+    }
+  }catch(e){}
+  return text.match(/[^.!?]+(?:[.!?]+|$)/g)?.map(x=>x.trim()).filter(Boolean) || [text];
+}
+function populateVoices(){
+  const current=$('voice').value;
+  state.voices=speechSynthesis.getVoices();
+  $('voice').innerHTML='';
+  state.voices.forEach((v,i)=>{
+    const o=document.createElement('option');
+    o.value=String(i); o.textContent=`${v.name} — ${v.lang}${v.default?' (default)':''}`;
+    $('voice').appendChild(o);
+  });
+  if(current && state.voices[Number(current)]) $('voice').value=current;
+}
+populateVoices();
+speechSynthesis.onvoiceschanged=populateVoices;
 
-$('openBtn').addEventListener('click',()=>{ $('pdfInput').click(); });
-$('dropZone').addEventListener('click',()=>{ $('pdfInput').click(); });
-$('dropZone').addEventListener('dragover',e=>{e.preventDefault();$('dropZone').classList.add('drag');});
-$('dropZone').addEventListener('dragleave',()=>$('dropZone').classList.remove('drag'));
-$('dropZone').addEventListener('drop',e=>{e.preventDefault();$('dropZone').classList.remove('drag');const f=e.dataTransfer.files[0];if(f) loadPdf(f);});
-$('pdfInput').addEventListener('change',e=>{const f=e.target.files&&e.target.files[0];if(f) loadPdf(f);e.target.value='';});
+$('rate').addEventListener('input',()=>{$('rateLabel').textContent=Number($('rate').value).toFixed(2)+'×';});
+
+$('openBtn').onclick=()=>$('pdfInput').click();
+$('dropZone').onclick=()=>$('pdfInput').click();
+$('dropZone').ondragover=e=>{e.preventDefault();$('dropZone').classList.add('drag');};
+$('dropZone').ondragleave=()=>$('dropZone').classList.remove('drag');
+$('dropZone').ondrop=e=>{
+  e.preventDefault(); $('dropZone').classList.remove('drag');
+  const f=e.dataTransfer.files[0]; if(f) loadPdf(f);
+};
+$('pdfInput').onchange=e=>{
+  const f=e.target.files?.[0]; if(f) loadPdf(f); e.target.value='';
+};
 
 async function readFile(file){
- if(file.type!=='application/pdf'&&!/\.pdf$/i.test(file.name||'')) throw new Error('Please select a PDF file.');
- if(typeof file.arrayBuffer==='function') return new Uint8Array(await file.arrayBuffer());
- return new Uint8Array(await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=()=>reject(r.error||new Error('Could not read file'));r.readAsArrayBuffer(file);}));
+  if(file.type!=='application/pdf'&&!/\.pdf$/i.test(file.name||'')) throw new Error('Please select a PDF file.');
+  return new Uint8Array(await file.arrayBuffer());
 }
-
-async function loadPdf(file){
- reset();$('fileName').textContent=file.name;status('Reading PDF...');
- try{
-  if(!pdfjsLibReady) throw new Error('PDF.js did not load. Refresh the page and try again.');
-  const data=await readFile(file); if(!data.length) throw new Error('The PDF is empty.');
-  state.pdf=await pdfjsLib.getDocument({data}).promise;status(`PDF loaded: ${state.pdf.numPages} pages. Reading chapters...`);
-  let outline=[];try{outline=await state.pdf.getOutline()||[];}catch(e){console.warn(e);}
-  state.chapters=[];
-  for(let i=0;i<outline.length;i++){
-   let page=0;try{let d=outline[i].dest;if(typeof d==='string')d=await state.pdf.getDestination(d);if(Array.isArray(d))page=await state.pdf.getPageIndex(d[0]);}catch(e){}
-   state.chapters.push({title:outline[i].title||`Chapter ${i+1}`,start:page,end:state.pdf.numPages-1});
+async function extractPageText(pageIndex){
+  const page=await state.pdf.getPage(pageIndex+1);
+  const content=await page.getTextContent();
+  return cleanText(content.items.map(x=>x.str).join(' '));
+}
+async function resolveDestPage(dest){
+  try{
+    let d=dest;
+    if(typeof d==='string') d=await state.pdf.getDestination(d);
+    if(Array.isArray(d) && d[0]) return await state.pdf.getPageIndex(d[0]);
+  }catch(e){}
+  return 0;
+}
+async function flattenOutline(items,depth=0,out=[]){
+  for(const item of items||[]){
+    const page=await resolveDestPage(item.dest);
+    out.push({title:(item.title||'Untitled').trim(),start:page,end:state.pdf.numPages-1,depth});
+    if(item.items?.length) await flattenOutline(item.items,depth+1,out);
   }
-  if(!state.chapters.length){for(let p=0;p<state.pdf.numPages;p+=5)state.chapters.push({title:`Pages ${p+1}-${Math.min(p+5,state.pdf.numPages)}`,start:p,end:Math.min(p+4,state.pdf.numPages-1)});}
-  for(let i=0;i<state.chapters.length-1;i++)state.chapters[i].end=Math.max(state.chapters[i].start,state.chapters[i+1].start-1);
-  renderChapters();await openChapter(0);status('PDF ready.');
- }catch(e){console.error(e);status('ERROR: '+e.message);$('text').textContent='Could not load this PDF. '+e.message;}
+  return out;
+}
+async function detectChaptersByText(){
+  const found=[];
+  const rx=/^(chapter\s+([0-9ivxlcdm]+|[a-z]+)\b.*|ch(?:ap)?\.?\s*([0-9ivxlcdm]+)\b.*)$/i;
+  for(let p=0;p<state.pdf.numPages;p++){
+    const txt=await extractPageText(p);
+    const candidates=txt.split(/(?<=[.!?])\s+|\s{2,}/).slice(0,20);
+    const heading=candidates.find(x=>{
+      const s=x.trim();
+      return s.length>=3 && s.length<=120 && rx.test(s);
+    });
+    if(heading && !found.some(x=>x.start===p)){
+      found.push({title:heading.trim(),start:p,end:state.pdf.numPages-1,depth:0});
+    }
+  }
+  return found;
+}
+function normalizeChapterRanges(chapters){
+  const seen=new Set();
+  const sorted=chapters
+    .filter(c=>Number.isInteger(c.start))
+    .sort((a,b)=>a.start-b.start || a.depth-b.depth)
+    .filter(c=>{
+      const key=`${c.start}:${c.title}`;
+      if(seen.has(key)) return false;
+      seen.add(key); return true;
+    });
+  for(let i=0;i<sorted.length;i++){
+    const next=sorted.slice(i+1).find(x=>x.start>sorted[i].start);
+    sorted[i].end=next?Math.max(sorted[i].start,next.start-1):state.pdf.numPages-1;
+  }
+  return sorted;
+}
+async function loadPdf(file){
+  reset(); $('fileName').textContent=file.name; setStatus('Reading PDF...');
+  try{
+    if(typeof pdfjsLib==='undefined') throw new Error('PDF.js did not load. Refresh and try again.');
+    const data=await readFile(file);
+    state.pdf=await pdfjsLib.getDocument({data}).promise;
+    setStatus(`PDF loaded: ${state.pdf.numPages} pages. Detecting chapters...`);
+
+    let chapters=[];
+    try{
+      const outline=await state.pdf.getOutline();
+      if(outline?.length) chapters=await flattenOutline(outline);
+    }catch(e){console.warn('Outline unavailable',e);}
+
+    if(!chapters.length){
+      setStatus('No table of contents found. Scanning for chapter headings...');
+      chapters=await detectChaptersByText();
+    }
+    if(!chapters.length){
+      chapters=[{title:'Full Document',start:0,end:state.pdf.numPages-1,depth:0}];
+    }
+
+    state.chapters=normalizeChapterRanges(chapters);
+    renderChapters();
+    await openChapter(0);
+    setStatus(`PDF ready. ${state.chapters.length} chapter${state.chapters.length===1?'':'s'} detected.`);
+  }catch(e){
+    console.error(e); setStatus('ERROR: '+e.message);
+    $('text').textContent='Could not load this PDF. '+e.message;
+  }
+}
+function renderChapters(){
+  $('count').textContent=state.chapters.length; $('chapters').innerHTML='';
+  state.chapters.forEach((c,i)=>{
+    const b=document.createElement('button');
+    b.className='chapter w-full text-left p-3 rounded-lg hover:bg-gray-800';
+    b.style.paddingLeft=`${12+Math.min(c.depth||0,3)*14}px`;
+    b.textContent=c.title; b.onclick=()=>openChapter(i);
+    $('chapters').appendChild(b);
+  });
+  highlight();
+}
+function highlight(){
+  [...$('chapters').children].forEach((b,i)=>b.classList.toggle('active',i===state.index));
+}
+async function openChapter(i){
+  if(!state.pdf||!state.chapters[i]) return;
+  stopSpeech(true); state.index=i; highlight();
+  const c=state.chapters[i]; $('chapterTitle').textContent=c.title;
+  setStatus('Extracting text...');
+  try{
+    const pages=[];
+    for(let p=c.start;p<=c.end;p++) pages.push(await extractPageText(p));
+    state.text=pages.filter(Boolean).join('\n\n').trim();
+    $('text').textContent=state.text||'No extractable text found in this chapter.';
+    state.chunks=segmentText(state.text);
+    state.chunk=0; updatePlayer();
+    setStatus(`Chapter ${i+1} of ${state.chapters.length} • pages ${c.start+1}-${c.end+1}`);
+  }catch(e){setStatus('Text extraction error: '+e.message);}
 }
 
-function renderChapters(){$('count').textContent=state.chapters.length;$('chapters').innerHTML='';state.chapters.forEach((c,i)=>{const b=document.createElement('button');b.className='chapter w-full text-left p-3 rounded-lg hover:bg-gray-800';b.textContent=c.title;b.onclick=()=>openChapter(i);$('chapters').appendChild(b);});highlight();}
-function highlight(){[...$('chapters').children].forEach((b,i)=>b.classList.toggle('active',i===state.index));}
-async function openChapter(i){if(!state.pdf||!state.chapters[i])return;state.index=i;highlight();const c=state.chapters[i];$('chapterTitle').textContent=c.title;status('Extracting text...');let out='';try{for(let p=c.start;p<=c.end;p++){const page=await state.pdf.getPage(p+1);const content=await page.getTextContent();out+=content.items.map(x=>x.str).join(' ')+'\n\n';}state.text=out.trim();$('text').textContent=state.text||'No extractable text found in this chapter.';state.chunks=state.text.match(/[^.!?]+[.!?]+/g)||[state.text];state.chunk=0;status(`Chapter ${i+1} of ${state.chapters.length}`);}catch(e){status('Text extraction error: '+e.message);}}
-$('prev').onclick=()=>{if(state.index>0)openChapter(state.index-1)};$('next').onclick=()=>{if(state.index<state.chapters.length-1)openChapter(state.index+1)};
-$('play').onclick=()=>{if(!state.chunks.length)return;if(state.playing){speechSynthesis.cancel();state.playing=false;$('play').textContent='▶ Play';return;}state.playing=true;$('play').textContent='⏸ Pause';speak();};
-function speak(){if(!state.playing||state.chunk>=state.chunks.length){state.playing=false;$('play').textContent='▶ Play';return;}const u=new SpeechSynthesisUtterance(state.chunks[state.chunk++]);u.onend=speak;u.onerror=()=>{state.playing=false;$('play').textContent='▶ Play';};speechSynthesis.speak(u);}
+$('prev').onclick=()=>{if(state.index>0)openChapter(state.index-1);};
+$('next').onclick=()=>{if(state.index<state.chapters.length-1)openChapter(state.index+1);};
+$('back').onclick=()=>{
+  stopSpeech(false); state.chunk=Math.max(0,state.chunk-1); updatePlayer();
+};
+$('forward').onclick=()=>{
+  stopSpeech(false); state.chunk=Math.min(Math.max(0,state.chunks.length-1),state.chunk+1); updatePlayer();
+};
+$('stop').onclick=()=>stopSpeech(true);
 
-$('translateBtn').onclick=()=>{$('translator').classList.remove('hidden');$('translator').classList.add('flex');};$('closeTranslator').onclick=()=>{$('translator').classList.add('hidden');$('translator').classList.remove('flex');};
-$('runTranslate').onclick=async()=>{
- if(!state.text){$('translateStatus').textContent='Upload a PDF and open a chapter first.';return;}
- let key=localStorage.getItem('pdfNarratorGeminiKey')||prompt('Enter your Gemini API key. It will be stored only in this browser.');if(!key)return;key=key.trim();localStorage.setItem('pdfNarratorGeminiKey',key);
- const lang=$('language').value;$('translateStatus').textContent='Translating...';$('translation').value='';
- try{const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent',{method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':key},body:JSON.stringify({contents:[{parts:[{text:`Translate the following text into ${lang}. Preserve the meaning. Return only the translation.\n\n${state.text}`}]}]})});const d=await r.json();if(!r.ok||d.error)throw new Error(d?.error?.message||`HTTP ${r.status}`);const out=d?.candidates?.[0]?.content?.parts?.map(x=>x.text||'').join('').trim();if(!out)throw new Error('Gemini returned no translation.');$('translation').value=out;$('translateStatus').textContent='Translation complete.';}catch(e){console.error(e);$('translateStatus').textContent='Translation failed: '+e.message;}}
+$('play').onclick=()=>{
+  if(!state.chunks.length) return;
+  if(state.paused){
+    speechSynthesis.resume(); state.paused=false; state.playing=true; updatePlayer(); return;
+  }
+  if(state.playing){
+    speechSynthesis.pause(); state.paused=true; updatePlayer(); return;
+  }
+  state.playing=true; state.paused=false; updatePlayer(); speakCurrent();
+};
+function speakCurrent(){
+  if(!state.playing||state.paused) return;
+  if(state.chunk>=state.chunks.length){
+    state.playing=false; state.paused=false; state.chunk=Math.max(0,state.chunks.length-1); updatePlayer(); return;
+  }
+  const u=new SpeechSynthesisUtterance(state.chunks[state.chunk]);
+  const voice=state.voices[Number($('voice').value)];
+  if(voice) u.voice=voice;
+  u.rate=Number($('rate').value)||1;
+  state.utterance=u; updatePlayer();
+  u.onend=()=>{
+    if(!state.playing||state.paused) return;
+    state.chunk++;
+    updatePlayer();
+    speakCurrent();
+  };
+  u.onerror=e=>{
+    console.error(e);
+    state.playing=false; state.paused=false; updatePlayer();
+  };
+  speechSynthesis.speak(u);
+}
+
+// Selection tracking
+document.addEventListener('selectionchange',()=>{
+  const sel=window.getSelection();
+  if(!sel||sel.isCollapsed) return;
+  const txt=sel.toString().trim();
+  if(txt && $('text').contains(sel.anchorNode)) state.selectedText=txt;
+});
+
+// AI settings
+$('settingsBtn').onclick=()=>{ $('apiKey').value=sessionStorage.getItem('pdfNarratorGeminiKey')||''; showModal('settingsModal'); };
+$('closeSettings').onclick=()=>hideModal('settingsModal');
+$('saveKey').onclick=()=>{
+  const k=$('apiKey').value.trim();
+  if(k){sessionStorage.setItem('pdfNarratorGeminiKey',k); hideModal('settingsModal');}
+};
+$('forgetKey').onclick=()=>{sessionStorage.removeItem('pdfNarratorGeminiKey');$('apiKey').value='';};
+
+$('aiBtn').onclick=()=>showModal('aiModal');
+$('closeAi').onclick=()=>hideModal('aiModal');
+$('readAi').onclick=()=>{
+  const t=$('aiOutput').value.trim(); if(!t)return;
+  speechSynthesis.cancel();
+  const u=new SpeechSynthesisUtterance(t);
+  const voice=state.voices[Number($('voice').value)];
+  if(voice)u.voice=voice; u.rate=Number($('rate').value)||1;
+  speechSynthesis.speak(u);
+};
+
+async function gemini(promptText){
+  const key=sessionStorage.getItem('pdfNarratorGeminiKey');
+  if(!key){hideModal('aiModal');showModal('settingsModal');throw new Error('Add your Gemini API key in Settings first.');}
+  const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent',{
+    method:'POST',
+    headers:{'Content-Type':'application/json','x-goog-api-key':key},
+    body:JSON.stringify({contents:[{parts:[{text:promptText}]}]})
+  });
+  const d=await r.json();
+  if(!r.ok||d.error) throw new Error(d?.error?.message||`HTTP ${r.status}`);
+  const out=d?.candidates?.[0]?.content?.parts?.map(x=>x.text||'').join('').trim();
+  if(!out) throw new Error('Gemini returned no text.');
+  return out;
+}
+function aiSource(){
+  const selected=state.selectedText?.trim();
+  if(selected) return selected.slice(0,30000);
+  return state.text.slice(0,30000);
+}
+function promptFor(action,text){
+  if(action==='simple') return `Explain the following text in very simple language. Keep important technical meaning, define jargon, and use short paragraphs:\n\n${text}`;
+  if(action==='summary') return `Summarize the following text accurately. Give the main idea, important details, and conclusions. Do not invent facts:\n\n${text}`;
+  if(action==='vocab') return `Identify the important technical or difficult terms in the following text. For each, give a short plain-language definition and explain how it is used in this passage:\n\n${text}`;
+  if(action==='translate') return `Translate the following text into ${$('language').value}. Preserve technical meaning, names, numbers, equations, and structure. Return only the translation:\n\n${text}`;
+  return `Explain the following text clearly and accurately. State what it means, why it matters, and explain technical concepts step by step without inventing information:\n\n${text}`;
+}
+document.querySelectorAll('.aiAction').forEach(btn=>btn.onclick=async()=>{
+  const action=btn.dataset.ai;
+  $('translateOptions').classList.toggle('hidden',action!=='translate');
+  const src=aiSource();
+  if(!src){$('aiStatus').textContent='Upload a PDF or select text first.';return;}
+  $('aiStatus').textContent='Working...'; $('aiOutput').value='';
+  try{
+    const out=await gemini(promptFor(action,src));
+    $('aiOutput').value=out; $('aiStatus').textContent='Done.';
+  }catch(e){$('aiStatus').textContent=e.message;}
+});
 </script>
 </body>
 </html>
