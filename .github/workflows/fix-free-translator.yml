@@ -9,7 +9,7 @@ permissions:
 
 jobs:
   patch:
-    if: ${{ !contains(github.event.head_commit.message, 'fix: route translator through free service') }}
+    if: ${{ !contains(github.event.head_commit.message, 'fix: use MyMemory translator directly') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -20,28 +20,32 @@ jobs:
           import re
           p = Path('index.html')
           s = p.read_text(encoding='utf-8')
-          pattern = r"async function callTranslate\(text,target,source\)\{.*?\}"
+          pattern = r"async function callTranslate\(text,target,source\).*?(?=async function translateCurrentPage)"
           replacement = r'''async function callTranslate(text,target,source){
-            // AI requests continue to use the secure Gemini endpoint.
+            // Normal translation uses MyMemory and needs no API key.
+            // Gemini remains available separately through the AI Tools.
+            const langMap={'English':'en','English (US)':'en','Punjabi':'pa','Punjabi (Gurmukhi)':'pa','Hindi':'hi','Hindi (Devanagari)':'hi','Spanish':'es','French':'fr','German':'de'};
             if(target==='AI response'){
               const r=await fetch('/api/translate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text,targetLanguage:target,sourceLanguage:source})});
               let d={};try{d=await r.json()}catch(e){}
               if(!r.ok)throw Error(d.error||`AI request failed (${r.status})`);
               return d.translation||'';
             }
-            // Normal translation uses MyMemory and requires no API key.
-            const langMap={'English':'en','English (US)':'en','Punjabi':'pa','Punjabi (Gurmukhi)':'pa','Hindi':'hi','Hindi (Devanagari)':'hi','Spanish':'es','French':'fr','German':'de'};
-            const sourceCode=langMap[source]||String(source||'').split('-')[0].toLowerCase()||'auto';
+            const sourceCode=langMap[source]||String(source||'').split('-')[0].toLowerCase()||'en';
             const targetCode=langMap[target]||String(target||'').split('-')[0].toLowerCase()||'en';
             if(sourceCode===targetCode)return text;
-            const url='https://api.mymemory.translated.net/get?q='+encodeURIComponent(text.slice(0,4500))+'&langpair='+encodeURIComponent(sourceCode+'|'+targetCode);
-            const r=await fetch(url);
+            const input=String(text||'').trim();
+            if(!input)throw Error('Please enter text to translate.');
+            const url='https://api.mymemory.translated.net/get?q='+encodeURIComponent(input.slice(0,4500))+'&langpair='+encodeURIComponent(sourceCode+'|'+targetCode);
+            const r=await fetch(url,{method:'GET',headers:{'Accept':'application/json'}});
             let d={};try{d=await r.json()}catch(e){}
-            if(!r.ok||d.responseStatus!==200)throw Error(d?.responseDetails||'Free translation service is temporarily unavailable.');
+            if(!r.ok)throw Error(`Free translation service failed (${r.status})`);
+            if(Number(d.responseStatus)!==200)throw Error(d?.responseDetails||'Free translation service is temporarily unavailable.');
             const out=d?.responseData?.translatedText;
             if(!out)throw Error('No translation was returned.');
             return out;
-          }'''
+          }
+          '''
           ns, n = re.subn(pattern, replacement, s, count=1, flags=re.S)
           if n != 1:
               raise SystemExit('Could not find callTranslate function')
@@ -56,5 +60,5 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add index.html
-          git commit -m 'fix: route translator through free service' || exit 0
+          git commit -m 'fix: use MyMemory translator directly' || exit 0
           git push
