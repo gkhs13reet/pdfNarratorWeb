@@ -1,0 +1,55 @@
+name: Repair PDF Narrator
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    if: ${{ !contains(github.event.head_commit.message, 'fix: update PDF Narrator Gemini integration') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Repair Gemini integration
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('index.html')
+          s = p.read_text(encoding='utf-8')
+
+          # Use the current stable Gemini Flash model documented by Google.
+          s = s.replace('models/gemini-2.5-flash:generateContent', 'models/gemini-3.6-flash:generateContent')
+
+          # Give users a useful message for common API-key failures instead of only HTTP status text.
+          old = "if(!r.ok||d.error)throw new Error(d?.error?.message||`HTTP ${r.status}`);"
+          new = "if(!r.ok||d.error){ const msg=d?.error?.message||`HTTP ${r.status}`; if(r.status===400) throw new Error('Gemini rejected the request. Check that your API key is valid and the Gemini API is enabled. '+msg); if(r.status===401||r.status===403) throw new Error('Gemini API key is invalid, blocked, or not allowed for this API. Create/check the key in Google AI Studio. '+msg); if(r.status===429) throw new Error('Gemini rate limit reached. Wait a little and try again. '+msg); throw new Error(msg); }"
+          if old in s:
+              s = s.replace(old, new, 1)
+
+          p.write_text(s, encoding='utf-8')
+          print('PDF Narrator repaired')
+
+      - name: Verify
+        run: |
+          grep -q 'gemini-3.6-flash:generateContent' index.html
+          grep -q 'x-goog-api-key' index.html
+          grep -q 'pdfInput' index.html
+          grep -q 'loadPdf' index.html
+
+      - name: Commit repair
+        shell: bash
+        run: |
+          if git diff --quiet -- index.html; then
+            echo 'No repair needed.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add index.html
+          git commit -m 'fix: update PDF Narrator Gemini integration'
+          git push
