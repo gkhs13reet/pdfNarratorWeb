@@ -1,0 +1,60 @@
+name: Fix free translator
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: ${{ !contains(github.event.head_commit.message, 'fix: route translator through free service') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch translator function
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+          p = Path('index.html')
+          s = p.read_text(encoding='utf-8')
+          pattern = r"async function callTranslate\(text,target,source\)\{.*?\}"
+          replacement = r'''async function callTranslate(text,target,source){
+            // AI requests continue to use the secure Gemini endpoint.
+            if(target==='AI response'){
+              const r=await fetch('/api/translate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text,targetLanguage:target,sourceLanguage:source})});
+              let d={};try{d=await r.json()}catch(e){}
+              if(!r.ok)throw Error(d.error||`AI request failed (${r.status})`);
+              return d.translation||'';
+            }
+            // Normal translation uses MyMemory and requires no API key.
+            const langMap={'English':'en','English (US)':'en','Punjabi':'pa','Punjabi (Gurmukhi)':'pa','Hindi':'hi','Hindi (Devanagari)':'hi','Spanish':'es','French':'fr','German':'de'};
+            const sourceCode=langMap[source]||String(source||'').split('-')[0].toLowerCase()||'auto';
+            const targetCode=langMap[target]||String(target||'').split('-')[0].toLowerCase()||'en';
+            if(sourceCode===targetCode)return text;
+            const url='https://api.mymemory.translated.net/get?q='+encodeURIComponent(text.slice(0,4500))+'&langpair='+encodeURIComponent(sourceCode+'|'+targetCode);
+            const r=await fetch(url);
+            let d={};try{d=await r.json()}catch(e){}
+            if(!r.ok||d.responseStatus!==200)throw Error(d?.responseDetails||'Free translation service is temporarily unavailable.');
+            const out=d?.responseData?.translatedText;
+            if(!out)throw Error('No translation was returned.');
+            return out;
+          }'''
+          ns, n = re.subn(pattern, replacement, s, count=1, flags=re.S)
+          if n != 1:
+              raise SystemExit('Could not find callTranslate function')
+          p.write_text(ns, encoding='utf-8')
+      - name: Verify
+        run: |
+          grep -q 'api.mymemory.translated.net/get' index.html
+          grep -q "target==='AI response'" index.html
+      - name: Commit
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add index.html
+          git commit -m 'fix: route translator through free service' || exit 0
+          git push
