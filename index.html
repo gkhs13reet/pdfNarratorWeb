@@ -413,14 +413,59 @@ $('play').onclick=()=>{
   }
   state.playing=true; state.paused=false; updatePlayer(); speakCurrent();
 };
+function bestVoiceFor(lang){
+  if (!state.voices || !state.voices.length) {
+    state.voices = speechSynthesis.getVoices();
+  }
+  const cleanLang = (lang || '').toLowerCase();
+  const base = cleanLang.split('-')[0];
+
+  // 1. Exact BCP-47 match
+  let exact = state.voices.find(v => v.lang.toLowerCase() === cleanLang);
+  if (exact) return exact;
+
+  // 2. Base language match
+  let baseMatch = state.voices.find(v => v.lang.toLowerCase().startsWith(base));
+  if (baseMatch) return baseMatch;
+
+  // 3. Name-based match
+  if (base === 'pa') {
+    let nameMatch = state.voices.find(v => /punjabi|pa[-_]in|ਪੰਜਾਬੀ/i.test(v.name + ' ' + v.lang));
+    if (nameMatch) return nameMatch;
+    // Fallback for Punjabi to Hindi voice if native Punjabi voice is missing on Windows
+    let hiMatch = state.voices.find(v => /hindi|hi[-_]in|हिन्दी/i.test(v.name + ' ' + v.lang));
+    if (hiMatch) return hiMatch;
+  }
+  if (base === 'hi') {
+    let nameMatch = state.voices.find(v => /hindi|hi[-_]in|हिन्दी/i.test(v.name + ' ' + v.lang));
+    if (nameMatch) return nameMatch;
+  }
+
+  return null;
+}
+
 function speakCurrent(){
   if(!state.playing||state.paused) return;
   if(state.chunk>=state.chunks.length){
     state.playing=false; state.paused=false; state.chunk=Math.max(0,state.chunks.length-1); updatePlayer(); return;
   }
-  const u=new SpeechSynthesisUtterance(state.chunks[state.chunk]);
-  const voice=state.voices[Number($('voice').value)];
-  if(voice) u.voice=voice;
+  const text = state.chunks[state.chunk];
+  const u=new SpeechSynthesisUtterance(text);
+  
+  // Auto-detect Punjabi Gurmukhi / Hindi Devanagari text script
+  if (/[\u0A00-\u0A7F]/.test(text)) {
+    u.lang = 'pa-IN';
+    const v = bestVoiceFor('pa-IN');
+    if (v) u.voice = v;
+  } else if (/[\u0900-\u097F]/.test(text)) {
+    u.lang = 'hi-IN';
+    const v = bestVoiceFor('hi-IN');
+    if (v) u.voice = v;
+  } else {
+    const voice=state.voices[Number($('voice').value)];
+    if(voice) u.voice=voice;
+  }
+
   u.rate=Number($('rate').value)||1;
   state.utterance=u; updatePlayer();
   u.onend=()=>{
@@ -430,97 +475,21 @@ function speakCurrent(){
     speakCurrent();
   };
   u.onerror=e=>{
-    console.error(e);
+    console.error('Speech synthesis error:', e);
     state.playing=false; state.paused=false; updatePlayer();
   };
   speechSynthesis.speak(u);
 }
 
-// Selection tracking
-document.addEventListener('selectionchange',()=>{
-  const sel=window.getSelection();
-  if(!sel||sel.isCollapsed) return;
-  const txt=sel.toString().trim();
-  if(txt && $('text').contains(sel.anchorNode)) state.selectedText=txt;
-});
-
-
-// Voice translator
-$('translatorBtn').onclick=()=>showModal('translatorModal');
-$('closeTranslator').onclick=()=>hideModal('translatorModal');
-
-function languageName(tag){
-  return {'en-US':'English','pa-IN':'Punjabi (Gurmukhi)','hi-IN':'Hindi'}[tag]||tag;
-}
-function bestVoiceFor(lang){
-  const exact=state.voices.find(v=>v.lang.toLowerCase()===lang.toLowerCase());
-  if(exact) return exact;
-  const base=lang.split('-')[0].toLowerCase();
-  return state.voices.find(v=>v.lang.toLowerCase().startsWith(base)) || null;
-}
-async function translateVoiceInput(){
-  const text=$('voiceInput').value.trim();
-  if(!text){$('voiceStatus').textContent='Speak or type some text first.';return;}
-  const target=$('voiceTo').value;
-  $('voiceStatus').textContent='Translating...';
-  $('voiceOutput').value='';
-  try{
-    let out = null;
-    if (sessionStorage.getItem('pdfNarratorGeminiKey')) {
-      out = await gemini(
-        `Translate the following ${languageName($('voiceFrom').value)} text into ${languageName(target)}. `+
-        `Preserve names, numbers, technical terms, and meaning. Return only the translation:\n\n${text}`
-      );
-    }
-    if (!out) {
-      out = await freeTranslate(text, target);
-    }
-    $('voiceOutput').value=out;
-    $('voiceStatus').textContent='Translation ready.';
-  }catch(e){
-    $('voiceStatus').textContent='Translation error: '+e.message;
-  }
-}
-$('translateVoiceText').onclick=translateVoiceInput;
-
-$('startListening').onclick=()=>{
-  const Recognition=window.SpeechRecognition||window.webkitSpeechRecognition;
-  if(!Recognition){
-    $('voiceStatus').textContent='Speech recognition is not supported in this browser. Type the text instead.';
-    return;
-  }
-  try{
-    if(state.recognition) state.recognition.abort();
-    const r=new Recognition();
-    state.recognition=r;
-    r.lang=$('voiceFrom').value;
-    r.interimResults=false;
-    r.maxAlternatives=1;
-    $('voiceStatus').textContent='Listening... speak now.';
-    r.onresult=async e=>{
-      const text=e.results?.[0]?.[0]?.transcript||'';
-      $('voiceInput').value=text;
-      $('voiceStatus').textContent='Speech recognized. Translating...';
-      await translateVoiceInput();
-    };
-    r.onerror=e=>{
-      $('voiceStatus').textContent=
-        e.error==='language-not-supported'
-        ? 'This browser does not support microphone recognition for that language. You can still type the text and translate it.'
-        : 'Speech recognition error: '+e.error;
-    };
-    r.onend=()=>{state.recognition=null;};
-    r.start();
-  }catch(e){
-    $('voiceStatus').textContent='Could not start microphone: '+e.message;
-  }
-};
-
 $('speakTranslated').onclick=()=>{
   const t=$('voiceOutput').value.trim();
   if(!t){$('voiceStatus').textContent='Translate something first.';return;}
   speechSynthesis.cancel();
-  const lang=$('voiceTo').value;
+  
+  let lang = $('voiceTo').value;
+  if (/[\u0A00-\u0A7F]/.test(t)) lang = 'pa-IN';
+  else if (/[\u0900-\u097F]/.test(t)) lang = 'hi-IN';
+
   const u=new SpeechSynthesisUtterance(t);
   u.lang=lang;
   const v=bestVoiceFor(lang);
@@ -528,8 +497,8 @@ $('speakTranslated').onclick=()=>{
   u.rate=Number($('rate').value)||1;
   speechSynthesis.speak(u);
   $('voiceStatus').textContent=v
-    ? `Speaking with ${v.name}.`
-    : `Speaking with the browser's available ${languageName(lang)} voice/fallback.`;
+    ? `Speaking with ${v.name} (${v.lang}).`
+    : `Speaking in ${languageName(lang)} using browser engine.`;
 };
 
 // AI settings
@@ -547,8 +516,15 @@ $('readAi').onclick=()=>{
   const t=$('aiOutput').value.trim(); if(!t)return;
   speechSynthesis.cancel();
   const u=new SpeechSynthesisUtterance(t);
-  const voice=state.voices[Number($('voice').value)];
-  if(voice)u.voice=voice; u.rate=Number($('rate').value)||1;
+  
+  let lang = 'en-US';
+  if (/[\u0A00-\u0A7F]/.test(t)) lang = 'pa-IN';
+  else if (/[\u0900-\u097F]/.test(t)) lang = 'hi-IN';
+
+  u.lang = lang;
+  const v = bestVoiceFor(lang) || state.voices[Number($('voice').value)];
+  if(v) u.voice=v;
+  u.rate=Number($('rate').value)||1;
   speechSynthesis.speak(u);
 };
 
