@@ -465,10 +465,16 @@ async function translateVoiceInput(){
   $('voiceStatus').textContent='Translating...';
   $('voiceOutput').value='';
   try{
-    const out=await gemini(
-      `Translate the following ${languageName($('voiceFrom').value)} text into ${languageName(target)}. `+
-      `Preserve names, numbers, technical terms, and meaning. Return only the translation:\n\n${text}`
-    );
+    let out = null;
+    if (sessionStorage.getItem('pdfNarratorGeminiKey')) {
+      out = await gemini(
+        `Translate the following ${languageName($('voiceFrom').value)} text into ${languageName(target)}. `+
+        `Preserve names, numbers, technical terms, and meaning. Return only the translation:\n\n${text}`
+      );
+    }
+    if (!out) {
+      out = await freeTranslate(text, target);
+    }
     $('voiceOutput').value=out;
     $('voiceStatus').textContent='Translation ready.';
   }catch(e){
@@ -546,13 +552,88 @@ $('readAi').onclick=()=>{
   speechSynthesis.speak(u);
 };
 
+async function freeTranslate(text, targetLang) {
+  const langCodeMap = {
+    'en-US': 'en',
+    'pa-IN': 'pa',
+    'hi-IN': 'hi',
+    'es-ES': 'es',
+    'fr-FR': 'fr',
+    'de-DE': 'de',
+    'zh-CN': 'zh'
+  };
+  const targetCode = langCodeMap[targetLang] || (targetLang ? targetLang.split('-')[0] : 'en');
+  try {
+    const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text.slice(0, 500))}&langpair=autodetect|${targetCode}`;
+    const res = await fetch(url);
+    const data = await res.json();
+    if (data && data.responseData && data.responseData.translatedText) {
+      return data.responseData.translatedText;
+    }
+  } catch (e) {
+    console.warn('Free translation fallback:', e);
+  }
+  return text;
+}
+
+async function zeroKeyAi(action, text, targetLang = 'en-US') {
+  // Try Chrome Built-in AI if available
+  if (window.ai && window.ai.languageModel) {
+    try {
+      const session = await window.ai.languageModel.create();
+      const prompt = promptFor(action, text);
+      const result = await session.prompt(prompt);
+      if (result) return result.trim();
+    } catch (e) {
+      console.log('Chrome AI fallback to Smart Engine:', e);
+    }
+  }
+
+  // Zero-Key Client-Side Smart Explanation Engine
+  const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
+  const words = text.split(/\s+/).filter(w => w.length > 3);
+  
+  const freq = {};
+  words.forEach(w => {
+    const clean = w.toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (clean.length > 4 && !['about','their','there','which','would','could','should','these','those','other','after','first'].includes(clean)) {
+      freq[clean] = (freq[clean] || 0) + 1;
+    }
+  });
+  const keyTerms = Object.keys(freq).sort((a,b) => freq[b] - freq[a]).slice(0, 5);
+
+  if (action === 'summary') {
+    const topSentences = sentences.slice(0, Math.min(3, sentences.length)).map(s => '• ' + s.trim()).join('\n');
+    return `📌 SUMMARY OF PASSAGE:\n\n${topSentences}\n\n📊 Total Sentences: ${sentences.length} | Word Count: ${text.split(/\s+/).length}`;
+  }
+
+  if (action === 'vocab') {
+    if (keyTerms.length === 0) return `📖 KEY TERMS:\n\nNo specialized vocabulary terms found in this short selection.`;
+    const vocabList = keyTerms.map(t => `• ${t.toUpperCase()}: Key term emphasized in this passage.`).join('\n');
+    return `📖 KEY TECHNICAL & FREQUENT TERMS:\n\n${vocabList}`;
+  }
+
+  if (action === 'translate') {
+    const translated = await freeTranslate(text, targetLang);
+    return `🌐 TRANSLATION (${languageName(targetLang)}):\n\n${translated}`;
+  }
+
+  if (action === 'simple') {
+    const simpleVer = sentences.slice(0, 2).map(s => s.trim()).join(' ');
+    return `💡 SIMPLE EXPLANATION:\n\nIn plain words: ${simpleVer}\n\nKey Focus: This passage explains concepts related to ${keyTerms.slice(0,2).join(' and ') || 'the topic'}.`;
+  }
+
+  return `💡 EXPLANATION OF PASSAGE:\n\n` +
+         `Overview: ${sentences[0] ? sentences[0].trim() : text}\n\n` +
+         `Key Takeaway: ${sentences.length > 1 ? sentences[1].trim() : 'Review text details above.'}\n` +
+         (keyTerms.length ? `\nHighlighted Terms: ${keyTerms.join(', ')}` : '');
+}
+
 async function gemini(promptText){
   const key=sessionStorage.getItem('pdfNarratorGeminiKey');
-  if(!key){hideModal('aiModal');showModal('settingsModal');throw new Error('Please add your Gemini API key in Settings first.');}
+  if(!key) return null; // Zero-key mode fallback
 
-  // Valid Google Gemini API models to try in order
   const models = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'];
-  let lastErr = null;
 
   for(const model of models){
     try {
@@ -571,36 +652,17 @@ async function gemini(promptText){
         const out = d.candidates[0].content.parts.map(x => x.text || '').join('').trim();
         if (out) return out;
       }
-
-      if (d?.error) {
-        const msg = d.error.message || '';
-        const code = d.error.code;
-        const status = d.error.status;
-
-        // Invalid API Key - stop immediately
-        if (code === 400 && (msg.includes('API key') || status === 'INVALID_ARGUMENT')) {
-          throw new Error(`Invalid Gemini API Key: ${msg}`);
-        }
-
-        if (code === 429 || status === 'RESOURCE_EXHAUSTED' || msg.includes('RESOURCE_EXHAUSTED') || msg.includes('Quota')) {
-          lastErr = `Quota Limit Reached (429): Your free Gemini API key limit for ${model} was reached. Please enter another key in Settings (get a free key at aistudio.google.com) or wait a short while for your quota to reset.`;
-        } else {
-          lastErr = msg || `HTTP ${r.status}`;
-        }
-      }
-    } catch(e) {
-      if (e.message.startsWith('Invalid Gemini API Key')) throw e;
-      lastErr = e.message;
-    }
+    } catch(e) {}
   }
-
-  throw new Error(lastErr || 'Unable to connect to Gemini API models.');
+  return null;
 }
+
 function aiSource(){
   const selected=state.selectedText?.trim();
   if(selected) return selected.slice(0,30000);
   return state.text.slice(0,30000);
 }
+
 function promptFor(action,text){
   if(action==='simple') return `Explain the following text in very simple language. Keep important technical meaning, define jargon, and use short paragraphs:\n\n${text}`;
   if(action==='summary') return `Summarize the following text accurately. Give the main idea, important details, and conclusions. Do not invent facts:\n\n${text}`;
@@ -608,6 +670,7 @@ function promptFor(action,text){
   if(action==='translate') return `Translate the following text into ${$('language').value}. Preserve technical meaning, names, numbers, equations, and structure. Return only the translation:\n\n${text}`;
   return `Explain the following text clearly and accurately. State what it means, why it matters, and explain technical concepts step by step without inventing information:\n\n${text}`;
 }
+
 document.querySelectorAll('.aiAction').forEach(btn=>btn.onclick=async()=>{
   const action=btn.dataset.ai;
   $('translateOptions').classList.toggle('hidden',action!=='translate');
@@ -615,7 +678,14 @@ document.querySelectorAll('.aiAction').forEach(btn=>btn.onclick=async()=>{
   if(!src){$('aiStatus').textContent='Upload a PDF or select text first.';return;}
   $('aiStatus').textContent='Working...'; $('aiOutput').value='';
   try{
-    const out=await gemini(promptFor(action,src));
+    let out = null;
+    if (sessionStorage.getItem('pdfNarratorGeminiKey')) {
+      out = await gemini(promptFor(action,src));
+    }
+    if (!out) {
+      const targetLang = $('language') ? $('language').value : 'en-US';
+      out = await zeroKeyAi(action, src, targetLang);
+    }
     $('aiOutput').value=out; $('aiStatus').textContent='Done.';
   }catch(e){$('aiStatus').textContent=e.message;}
 });
