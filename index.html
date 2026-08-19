@@ -1,3 +1,624 @@
-<!doctype html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>PDF Narrator V2</title><script src="https://cdn.tailwindcss.com"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script><script src="./translator-fix.js"></script></head><body class="bg-gray-950 text-gray-100 min-h-screen"><header class="bg-gray-900 border-b border-gray-800 p-4 sticky top-0 z-20"><div class="max-w-7xl mx-auto flex flex-wrap gap-2 items-center justify-between"><h1 class="text-xl font-bold">📖 PDF Narrator V2</h1><div class="flex flex-wrap gap-2"><button id="open" class="bg-blue-600 px-4 py-2 rounded-lg">📄 Open PDF</button><button id="translator" class="bg-emerald-700 px-4 py-2 rounded-lg">🌐 Translator</button><button id="ai" class="bg-purple-700 px-4 py-2 rounded-lg">✨ AI Tools</button><input id="file" type="file" accept="application/pdf,.pdf" hidden></div></div></header><main class="max-w-7xl mx-auto p-4 grid lg:grid-cols-[280px_1fr] gap-4"><aside class="bg-gray-900 rounded-xl p-4"><h2 class="font-bold mb-3">Chapters <span id="count" class="text-gray-500">0</span></h2><div id="chapters" class="space-y-1"></div></aside><section class="bg-gray-900 rounded-xl p-4"><div id="drop" class="border-2 border-dashed border-gray-600 rounded-xl p-8 text-center cursor-pointer"><div class="text-4xl">📄</div><b>Upload PDF</b><p class="text-gray-400 text-sm">Click or drag a PDF here</p><p id="name" class="text-blue-400"></p></div><p id="status" class="text-sm text-gray-400 my-3">No PDF loaded.</p><div class="flex flex-wrap gap-2 mb-3"><button id="prevPage" class="bg-gray-800 px-3 py-2 rounded">← Previous</button><button id="nextPage" class="bg-gray-800 px-3 py-2 rounded">Next →</button><button id="pagePa" class="bg-emerald-800 px-3 py-2 rounded">English → Punjabi</button><button id="pageHi" class="bg-amber-800 px-3 py-2 rounded">English → Hindi</button><button id="pageEn" class="bg-sky-800 px-3 py-2 rounded">Punjabi → English</button></div><div class="flex justify-between mb-2"><h2 id="title" class="text-xl font-bold">No PDF Loaded</h2><span id="page" class="text-sm text-gray-400">0 / 0</span></div><div id="text" class="whitespace-pre-wrap leading-8 text-gray-300 select-text min-h-64">Select a PDF to begin.</div><div class="border-t border-gray-800 mt-6 pt-4"><div class="flex flex-wrap gap-2"><button id="play" class="bg-blue-600 px-4 py-2 rounded">▶ Play</button><button id="stop" class="bg-red-800 px-4 py-2 rounded">■ Stop</button><select id="voice" class="bg-gray-800 px-2 py-2 rounded min-w-48"></select><label class="text-sm flex items-center gap-2">Speed <input id="rate" type="range" min=".7" max="2" step=".05" value="1"></label></div></div></section></main><div id="modal" class="fixed inset-0 bg-black/70 hidden items-center justify-center p-4 z-50"><div class="bg-gray-900 rounded-xl p-5 w-full max-w-3xl"><div class="flex justify-between"><h2 class="text-xl font-bold">🌐 Free Translator</h2><button id="close">×</button></div><div class="grid md:grid-cols-2 gap-3 my-4"><label>From<select id="from" class="block w-full bg-gray-800 rounded p-2"><option value="en-US">English</option><option value="pa-IN">Punjabi</option><option value="hi-IN">Hindi</option></select></label><label>To<select id="to" class="block w-full bg-gray-800 rounded p-2"><option value="pa-IN">Punjabi</option><option value="hi-IN">Hindi</option><option value="en-US">English</option></select></label></div><div class="flex flex-wrap gap-2 mb-3"><button id="listen" class="bg-red-700 px-4 py-2 rounded">🎙 Speak</button><button id="translate" class="bg-emerald-700 px-4 py-2 rounded">Translate</button><button id="speak" class="bg-blue-700 px-4 py-2 rounded">🔊 Speak Translation</button></div><p id="vstatus" class="text-sm text-gray-400">Ready.</p><textarea id="input" class="w-full h-32 bg-gray-950 border border-gray-700 rounded p-3 my-2" placeholder="Type or speak text..."></textarea><textarea id="output" class="w-full h-32 bg-gray-950 border border-gray-700 rounded p-3" placeholder="Translation..."></textarea><p class="text-xs text-gray-500 mt-2">Uses a free browser translation service. No Gemini key is required.</p></div></div><div id="aiModal" class="fixed inset-0 bg-black/70 hidden items-center justify-center p-4 z-50"><div class="bg-gray-900 rounded-xl p-5 w-full max-w-3xl"><div class="flex justify-between"><h2 class="text-xl font-bold">✨ AI Tools</h2><button id="aiClose">×</button></div><p class="text-gray-400 my-3">Gemini AI tools require a server-side GEMINI_API_KEY. The free Translator does not.</p><textarea id="aiText" class="w-full h-48 bg-gray-950 border border-gray-700 rounded p-3" placeholder="Enter text..."></textarea><div class="flex gap-2 my-3"><button data-action="Explain" class="aiBtn bg-purple-700 px-3 py-2 rounded">Explain</button><button data-action="Summarize" class="aiBtn bg-purple-700 px-3 py-2 rounded">Summarize</button><button data-action="Translate" class="aiBtn bg-purple-700 px-3 py-2 rounded">Translate</button></div><div id="aiResult" class="whitespace-pre-wrap bg-gray-950 p-3 rounded min-h-32"></div></div></div><script>
-pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';const $=x=>document.getElementById(x);let pdf=null,current=0,pageText='',chapters=[];let voices=[];const langName={'en-US':'English','pa-IN':'Punjabi','hi-IN':'Hindi'};function status(x){$('status').textContent=x}function fillVoices(){voices=speechSynthesis.getVoices();$('voice').innerHTML=voices.map((v,i)=>`<option value="${i}">${v.name} — ${v.lang}</option>`).join('')}fillVoices();speechSynthesis.onvoiceschanged=fillVoices;$('open').onclick=()=>$('file').click();$('drop').onclick=()=>$('file').click();$('file').onchange=e=>e.target.files[0]&&load(e.target.files[0]);$('drop').ondragover=e=>e.preventDefault();$('drop').ondrop=e=>{e.preventDefault();e.dataTransfer.files[0]&&load(e.dataTransfer.files[0])};async function getPage(n){const p=await pdf.getPage(n+1);const c=await p.getTextContent();return c.items.map(x=>x.str).join(' ').replace(/\s+/g,' ').trim()}async function load(f){try{status('Loading PDF...');pdf=await pdfjsLib.getDocument({data:new Uint8Array(await f.arrayBuffer())}).promise;$('name').textContent=f.name;chapters=[];try{const o=await pdf.getOutline();for(const x of o||[])chapters.push({title:x.title,start:await destPage(x.dest)})}catch(e){}if(!chapters.length)chapters=[{title:'Full Document',start:0}];$('count').textContent=chapters.length;$('chapters').innerHTML=chapters.map((c,i)=>`<button class="w-full text-left p-2 rounded hover:bg-gray-800" onclick="openChapter(${i})">${c.title}</button>`).join('');await showPage(0);status(`PDF ready: ${pdf.numPages} pages.`)}catch(e){status('PDF error: '+e.message)}}async function destPage(d){try{if(typeof d==='string')d=await pdf.getDestination(d);return d?await pdf.getPageIndex(d[0]):0}catch(e){return 0}}window.openChapter=async i=>showPage(chapters[i].start);async function showPage(n){if(!pdf)return;current=Math.max(0,Math.min(pdf.numPages-1,n));speechSynthesis.cancel();pageText=await getPage(current);$('text').textContent=pageText||'No selectable text found on this page.';$('title').textContent=`Page ${current+1}`;$('page').textContent=`${current+1} / ${pdf.numPages}`;status(`Showing page ${current+1} of ${pdf.numPages}.`)}$('prevPage').onclick=()=>showPage(current-1);$('nextPage').onclick=()=>showPage(current+1);async function pageTranslate(to,from){if(!pageText){status('Open a PDF page first.');return}status('Translating...');try{const out=await pdfNarratorFreeTranslate(pageText,from,to);$('text').textContent=out;status('Translation complete.')}catch(e){status('Translation error: '+e.message)}}$('pagePa').onclick=()=>pageTranslate('pa-IN','en-US');$('pageHi').onclick=()=>pageTranslate('hi-IN','en-US');$('pageEn').onclick=()=>pageTranslate('en-US','pa-IN');$('play').onclick=()=>{if(!pageText)return;speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(pageText);const v=voices[+$('voice').value];if(v)u.voice=v;u.rate=+$('rate').value;speechSynthesis.speak(u)};$('stop').onclick=()=>speechSynthesis.cancel();function show(id){$(id).classList.remove('hidden');$(id).classList.add('flex')}function hide(id){$(id).classList.add('hidden');$(id).classList.remove('flex')}$('translator').onclick=()=>show('modal');$('close').onclick=()=>hide('modal');$('translate').onclick=async()=>{const t=$('input').value.trim();if(!t){$('vstatus').textContent='Enter or speak text first.';return}try{$('vstatus').textContent='Translating...';$('output').value=await pdfNarratorFreeTranslate(t,$('from').value,$('to').value);$('vstatus').textContent='Translation ready.'}catch(e){$('vstatus').textContent='Translation error: '+e.message}};$('listen').onclick=()=>{const R=window.SpeechRecognition||window.webkitSpeechRecognition;if(!R){$('vstatus').textContent='Speech recognition is not supported. Type the text instead.';return}const r=new R();r.lang=$('from').value;r.interimResults=false;r.onresult=e=>{$('input').value=e.results[0][0].transcript;$('translate').click()};r.onerror=e=>$('vstatus').textContent='Microphone error: '+e.error;r.start();$('vstatus').textContent='Listening...'};$('speak').onclick=()=>{const t=$('output').value.trim();if(!t)return;const u=new SpeechSynthesisUtterance(t);u.lang=$('to').value;const v=voices.find(x=>x.lang.toLowerCase().startsWith($('to').value.slice(0,2).toLowerCase()));if(v)u.voice=v;u.rate=+$('rate').value;speechSynthesis.cancel();speechSynthesis.speak(u)};$('ai').onclick=()=>show('aiModal');$('aiClose').onclick=()=>hide('aiModal');document.querySelectorAll('.aiBtn').forEach(b=>b.onclick=()=>{$('aiResult').textContent='Gemini AI is not configured on this static page. The Translator above works without an API key.'});
-</script></body></html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PDF Narrator V2</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+  body{font-family:Inter,Arial,sans-serif}
+  .drop{border:2px dashed #4b5563}
+  .drop.drag{border-color:#3b82f6;background:#111827}
+  .chapter.active{background:#1e3a5f}
+  .reader::selection{background:#7c3aed;color:#fff}
+</style>
+</head>
+<body class="bg-gray-950 text-gray-100 min-h-screen">
+<header class="bg-gray-900 border-b border-gray-800 p-4 flex flex-wrap gap-3 items-center justify-between sticky top-0 z-30">
+  <h1 class="text-xl font-bold">📖 PDF Narrator V2</h1>
+  <div class="flex flex-wrap gap-2">
+    <button id="openBtn" class="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded-lg">📄 Open PDF</button>
+    <button id="translatorBtn" class="bg-emerald-700 hover:bg-emerald-600 px-4 py-2 rounded-lg">🌐 Voice Translator</button>
+    <button id="aiBtn" class="bg-purple-600 hover:bg-purple-500 px-4 py-2 rounded-lg">✨ AI Tools</button>
+    <button id="settingsBtn" class="bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded-lg">⚙ Settings</button>
+    <input id="pdfInput" type="file" accept=".pdf,application/pdf" class="hidden">
+  </div>
+</header>
+
+<main class="max-w-7xl mx-auto p-4 grid lg:grid-cols-[280px_1fr] gap-4">
+  <aside class="bg-gray-900 rounded-xl p-3 h-fit lg:sticky lg:top-24">
+    <div class="flex justify-between items-center mb-3">
+      <h2 class="font-bold">Chapters</h2>
+      <span id="count" class="text-gray-400">0</span>
+    </div>
+    <div id="chapters" class="space-y-1 max-h-[70vh] overflow-auto"></div>
+  </aside>
+
+  <section class="bg-gray-900 rounded-xl p-4 min-h-[75vh]">
+    <div id="dropZone" class="drop rounded-xl p-7 text-center mb-4 cursor-pointer">
+      <div class="text-5xl mb-2">📄</div>
+      <h2 class="text-xl font-bold">Upload a PDF file</h2>
+      <p class="text-gray-400 mt-2">Click here, use Open PDF, or drag and drop a PDF.</p>
+      <p id="fileName" class="text-blue-400 mt-3"></p>
+    </div>
+
+    <div id="status" class="text-sm text-gray-400 mb-3">No PDF loaded.</div>
+    <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+      <h2 id="chapterTitle" class="text-2xl font-bold">No PDF Loaded</h2>
+      <span id="pageIndicator" class="text-sm bg-gray-800 px-3 py-1 rounded-full">Page 0 / 0</span>
+    </div>
+
+    <div class="flex flex-wrap gap-2 mb-4">
+      <button id="prevPage" class="bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded-lg">← Previous Page</button>
+      <button id="nextPage" class="bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded-lg">Next Page →</button>
+      <button id="translatePageEnPa" class="bg-emerald-800 hover:bg-emerald-700 px-4 py-2 rounded-lg">English → Punjabi</button>
+      <button id="translatePageEnHi" class="bg-amber-800 hover:bg-amber-700 px-4 py-2 rounded-lg">English → Hindi</button>
+      <button id="translatePagePaEn" class="bg-sky-800 hover:bg-sky-700 px-4 py-2 rounded-lg">Punjabi → English</button>
+    </div>
+
+    <div id="text" class="reader whitespace-pre-wrap leading-8 text-gray-300 select-text">Select a PDF to begin reading.</div>
+
+    <div class="mt-6 border-t border-gray-800 pt-4 space-y-3">
+      <div class="flex flex-wrap gap-2 items-center">
+        <button id="prev" class="bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded-lg">← Previous</button>
+        <button id="back" class="bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded-lg">⏪ Sentence</button>
+        <button id="play" class="bg-blue-600 hover:bg-blue-500 px-5 py-2 rounded-lg font-semibold">▶ Play</button>
+        <button id="forward" class="bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded-lg">Sentence ⏩</button>
+        <button id="next" class="bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded-lg">Next →</button>
+        <button id="stop" class="bg-red-900 hover:bg-red-800 px-4 py-2 rounded-lg">■ Stop</button>
+      </div>
+
+      <div class="grid md:grid-cols-2 gap-3">
+        <label class="text-sm">Voice
+          <select id="voice" class="mt-1 w-full bg-gray-800 border border-gray-700 rounded-lg p-2"></select>
+        </label>
+        <label class="text-sm">Speed: <span id="rateLabel">1.00×</span>
+          <input id="rate" type="range" min="0.75" max="2" step="0.05" value="1" class="mt-2 w-full">
+        </label>
+      </div>
+      <div class="text-xs text-gray-500">Sentence <span id="progress">0 / 0</span></div>
+    </div>
+  </section>
+</main>
+
+
+<!-- Voice Translator modal -->
+<div id="translatorModal" class="fixed inset-0 bg-black/70 hidden items-center justify-center p-4 z-50">
+  <div class="bg-gray-900 rounded-xl p-5 w-full max-w-3xl max-h-[90vh] overflow-auto">
+    <div class="flex justify-between items-center mb-4">
+      <h2 class="text-xl font-bold">🌐 Voice Translator</h2>
+      <button id="closeTranslator" class="text-2xl">×</button>
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-4 mb-4">
+      <label class="text-sm">From
+        <select id="voiceFrom" class="mt-1 w-full bg-gray-800 border border-gray-700 rounded-lg p-2">
+          <option value="en-US">English</option>
+          <option value="pa-IN">Punjabi</option>
+          <option value="hi-IN">Hindi</option>
+        </select>
+      </label>
+      <label class="text-sm">To
+        <select id="voiceTo" class="mt-1 w-full bg-gray-800 border border-gray-700 rounded-lg p-2">
+          <option value="pa-IN">Punjabi</option>
+          <option value="hi-IN">Hindi</option>
+          <option value="en-US">English</option>
+        </select>
+      </label>
+    </div>
+
+    <div class="flex flex-wrap gap-2 mb-3">
+      <button id="startListening" class="bg-red-700 hover:bg-red-600 px-4 py-2 rounded-lg">🎙 Start Speaking</button>
+      <button id="translateVoiceText" class="bg-emerald-700 hover:bg-emerald-600 px-4 py-2 rounded-lg">Translate Text</button>
+      <button id="speakTranslated" class="bg-blue-700 hover:bg-blue-600 px-4 py-2 rounded-lg">🔊 Speak Translation</button>
+    </div>
+
+    <p id="voiceStatus" class="text-sm text-gray-400 mb-3">Ready.</p>
+
+    <label class="block text-sm mb-1">Recognized / source text</label>
+    <textarea id="voiceInput" class="w-full h-36 bg-gray-950 border border-gray-700 rounded-lg p-3 mb-4" placeholder="Speak or type English, Punjabi, or Hindi..."></textarea>
+
+    <label class="block text-sm mb-1">Translation</label>
+    <textarea id="voiceOutput" class="w-full h-36 bg-gray-950 border border-gray-700 rounded-lg p-3" placeholder="Translation appears here..."></textarea>
+  </div>
+</div>
+
+<!-- AI modal -->
+<div id="aiModal" class="fixed inset-0 bg-black/70 hidden items-center justify-center p-4 z-50">
+  <div class="bg-gray-900 rounded-xl p-5 w-full max-w-3xl max-h-[90vh] overflow-auto">
+    <div class="flex justify-between items-center mb-4">
+      <h2 class="text-xl font-bold">✨ AI Tools</h2>
+      <button id="closeAi" class="text-2xl">×</button>
+    </div>
+    <p class="text-sm text-gray-400 mb-3">Select text in the reader first, or the current chapter will be used.</p>
+    <div class="grid sm:grid-cols-2 md:grid-cols-3 gap-2 mb-3">
+      <button data-ai="explain" class="aiAction bg-purple-700 p-2 rounded-lg">Explain</button>
+      <button data-ai="simple" class="aiAction bg-purple-700 p-2 rounded-lg">Explain Simply</button>
+      <button data-ai="summary" class="aiAction bg-purple-700 p-2 rounded-lg">Summarize</button>
+      <button data-ai="vocab" class="aiAction bg-purple-700 p-2 rounded-lg">Vocabulary</button>
+      <button data-ai="translate" class="aiAction bg-purple-700 p-2 rounded-lg">Translate</button>
+      <button id="readAi" class="bg-blue-700 p-2 rounded-lg">🔊 Read Result</button>
+    </div>
+    <div id="translateOptions" class="hidden mb-3">
+      <label class="text-sm text-gray-400">Translate to</label>
+      <select id="language" class="w-full bg-gray-800 rounded-lg p-2 mt-1">
+        <option>Punjabi</option><option>Hindi</option><option>English</option>
+        <option>Spanish</option><option>French</option><option>German</option>
+      </select>
+    </div>
+    <p id="aiStatus" class="text-sm text-gray-400 mb-2"></p>
+    <textarea id="aiOutput" class="w-full h-80 bg-gray-950 border border-gray-700 rounded-lg p-3" placeholder="AI result will appear here..."></textarea>
+  </div>
+</div>
+
+<!-- Settings modal -->
+<div id="settingsModal" class="fixed inset-0 bg-black/70 hidden items-center justify-center p-4 z-50">
+  <div class="bg-gray-900 rounded-xl p-5 w-full max-w-xl">
+    <div class="flex justify-between items-center mb-4">
+      <h2 class="text-xl font-bold">⚙ Settings</h2>
+      <button id="closeSettings" class="text-2xl">×</button>
+    </div>
+    <label class="block text-sm mb-1">Gemini API key</label>
+    <input id="apiKey" type="password" autocomplete="off" class="w-full bg-gray-800 border border-gray-700 rounded-lg p-2" placeholder="Paste Gemini API key">
+    <p class="text-xs text-gray-500 mt-2">Stored only for this browser tab/session by default.</p>
+    <div class="flex flex-wrap gap-2 mt-4">
+      <button id="saveKey" class="bg-blue-600 px-4 py-2 rounded-lg">Save for session</button>
+      <button id="forgetKey" class="bg-red-900 px-4 py-2 rounded-lg">Forget key</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const PDFJS_VERSION='3.11.174';
+if(typeof pdfjsLib!=='undefined'){
+  pdfjsLib.GlobalWorkerOptions.workerSrc=`https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDFJS_VERSION}/pdf.worker.min.js`;
+}
+const $=id=>document.getElementById(id);
+const state={
+  pdf:null, chapters:[], index:0, text:'', chunks:[], chunk:0,
+  playing:false, paused:false, utterance:null, voices:[], selectedText:'',
+  currentPage:0, pageText:'', recognition:null
+};
+
+function setStatus(msg){$('status').textContent=msg;}
+function showModal(id){$(id).classList.remove('hidden');$(id).classList.add('flex');}
+function hideModal(id){$(id).classList.add('hidden');$(id).classList.remove('flex');}
+function updatePlayer(){
+  $('play').textContent=state.paused?'▶ Resume':state.playing?'⏸ Pause':'▶ Play';
+  $('progress').textContent=`${Math.min(state.chunk+1,state.chunks.length||0)} / ${state.chunks.length}`;
+}
+function stopSpeech(resetChunk=false){
+  speechSynthesis.cancel();
+  state.playing=false; state.paused=false; state.utterance=null;
+  if(resetChunk) state.chunk=0;
+  updatePlayer();
+}
+function reset(){
+  stopSpeech(true);
+  state.pdf=null; state.chapters=[]; state.index=0; state.text=''; state.chunks=[];
+  state.currentPage=0; state.pageText='';
+  $('chapters').innerHTML=''; $('count').textContent='0';
+  $('text').textContent='Select a PDF to begin reading.';
+  $('chapterTitle').textContent='No PDF Loaded';
+  $('pageIndicator').textContent='Page 0 / 0';
+}
+function cleanText(s){
+  return s.replace(/\s+/g,' ').replace(/\s+([,.;:!?])/g,'$1').trim();
+}
+function segmentText(text){
+  if(!text) return [];
+  try{
+    if('Segmenter' in Intl){
+      const seg=new Intl.Segmenter('en',{granularity:'sentence'});
+      return [...seg.segment(text)].map(x=>x.segment.trim()).filter(Boolean);
+    }
+  }catch(e){}
+  return text.match(/[^.!?]+(?:[.!?]+|$)/g)?.map(x=>x.trim()).filter(Boolean) || [text];
+}
+function populateVoices(){
+  const current=$('voice').value;
+  state.voices=speechSynthesis.getVoices();
+  $('voice').innerHTML='';
+  state.voices.forEach((v,i)=>{
+    const o=document.createElement('option');
+    o.value=String(i); o.textContent=`${v.name} — ${v.lang}${v.default?' (default)':''}`;
+    $('voice').appendChild(o);
+  });
+  if(current && state.voices[Number(current)]) $('voice').value=current;
+}
+populateVoices();
+speechSynthesis.onvoiceschanged=populateVoices;
+
+$('rate').addEventListener('input',()=>{$('rateLabel').textContent=Number($('rate').value).toFixed(2)+'×';});
+
+$('openBtn').onclick=()=>$('pdfInput').click();
+$('dropZone').onclick=()=>$('pdfInput').click();
+$('dropZone').ondragover=e=>{e.preventDefault();$('dropZone').classList.add('drag');};
+$('dropZone').ondragleave=()=>$('dropZone').classList.remove('drag');
+$('dropZone').ondrop=e=>{
+  e.preventDefault(); $('dropZone').classList.remove('drag');
+  const f=e.dataTransfer.files[0]; if(f) loadPdf(f);
+};
+$('pdfInput').onchange=e=>{
+  const f=e.target.files?.[0]; if(f) loadPdf(f); e.target.value='';
+};
+
+async function readFile(file){
+  if(file.type!=='application/pdf'&&!/\.pdf$/i.test(file.name||'')) throw new Error('Please select a PDF file.');
+  return new Uint8Array(await file.arrayBuffer());
+}
+async function extractPageText(pageIndex){
+  const page=await state.pdf.getPage(pageIndex+1);
+  const content=await page.getTextContent();
+  return cleanText(content.items.map(x=>x.str).join(' '));
+}
+async function resolveDestPage(dest){
+  try{
+    let d=dest;
+    if(typeof d==='string') d=await state.pdf.getDestination(d);
+    if(Array.isArray(d) && d[0]) return await state.pdf.getPageIndex(d[0]);
+  }catch(e){}
+  return 0;
+}
+async function flattenOutline(items,depth=0,out=[]){
+  for(const item of items||[]){
+    const page=await resolveDestPage(item.dest);
+    out.push({title:(item.title||'Untitled').trim(),start:page,end:state.pdf.numPages-1,depth});
+    if(item.items?.length) await flattenOutline(item.items,depth+1,out);
+  }
+  return out;
+}
+async function detectChaptersByText(){
+  const found=[];
+  const rx=/^(chapter\s+([0-9ivxlcdm]+|[a-z]+)\b.*|ch(?:ap)?\.?\s*([0-9ivxlcdm]+)\b.*)$/i;
+  for(let p=0;p<state.pdf.numPages;p++){
+    const txt=await extractPageText(p);
+    const candidates=txt.split(/(?<=[.!?])\s+|\s{2,}/).slice(0,20);
+    const heading=candidates.find(x=>{
+      const s=x.trim();
+      return s.length>=3 && s.length<=120 && rx.test(s);
+    });
+    if(heading && !found.some(x=>x.start===p)){
+      found.push({title:heading.trim(),start:p,end:state.pdf.numPages-1,depth:0});
+    }
+  }
+  return found;
+}
+function normalizeChapterRanges(chapters){
+  const seen=new Set();
+  const sorted=chapters
+    .filter(c=>Number.isInteger(c.start))
+    .sort((a,b)=>a.start-b.start || a.depth-b.depth)
+    .filter(c=>{
+      const key=`${c.start}:${c.title}`;
+      if(seen.has(key)) return false;
+      seen.add(key); return true;
+    });
+  for(let i=0;i<sorted.length;i++){
+    const next=sorted.slice(i+1).find(x=>x.start>sorted[i].start);
+    sorted[i].end=next?Math.max(sorted[i].start,next.start-1):state.pdf.numPages-1;
+  }
+  return sorted;
+}
+
+async function openPage(pageIndex){
+  if(!state.pdf) return;
+  pageIndex=Math.max(0,Math.min(state.pdf.numPages-1,pageIndex));
+  stopSpeech(true);
+  state.currentPage=pageIndex;
+  state.pageText=await extractPageText(pageIndex);
+  state.text=state.pageText;
+  state.chunks=segmentText(state.text);
+  state.chunk=0;
+  $('text').textContent=state.text||'No extractable text found on this page.';
+  $('chapterTitle').textContent=`Page ${pageIndex+1}`;
+  $('pageIndicator').textContent=`Page ${pageIndex+1} / ${state.pdf.numPages}`;
+  setStatus(`Showing page ${pageIndex+1} of ${state.pdf.numPages}`);
+  updatePlayer();
+}
+
+async function loadPdf(file){
+  reset(); $('fileName').textContent=file.name; setStatus('Reading PDF...');
+  try{
+    if(typeof pdfjsLib==='undefined') throw new Error('PDF.js did not load. Refresh and try again.');
+    const data=await readFile(file);
+    state.pdf=await pdfjsLib.getDocument({data}).promise;
+    setStatus(`PDF loaded: ${state.pdf.numPages} pages. Detecting chapters...`);
+
+    let chapters=[];
+    try{
+      const outline=await state.pdf.getOutline();
+      if(outline?.length) chapters=await flattenOutline(outline);
+    }catch(e){console.warn('Outline unavailable',e);}
+
+    if(!chapters.length){
+      setStatus('No table of contents found. Scanning for chapter headings...');
+      chapters=await detectChaptersByText();
+    }
+    if(!chapters.length){
+      chapters=[{title:'Full Document',start:0,end:state.pdf.numPages-1,depth:0}];
+    }
+
+    state.chapters=normalizeChapterRanges(chapters);
+    renderChapters();
+    await openPage(0);
+    setStatus(`PDF ready. ${state.pdf.numPages} pages • ${state.chapters.length} chapter${state.chapters.length===1?'':'s'} detected.`);
+  }catch(e){
+    console.error(e); setStatus('ERROR: '+e.message);
+    $('text').textContent='Could not load this PDF. '+e.message;
+  }
+}
+function renderChapters(){
+  $('count').textContent=state.chapters.length; $('chapters').innerHTML='';
+  state.chapters.forEach((c,i)=>{
+    const b=document.createElement('button');
+    b.className='chapter w-full text-left p-3 rounded-lg hover:bg-gray-800';
+    b.style.paddingLeft=`${12+Math.min(c.depth||0,3)*14}px`;
+    b.textContent=c.title; b.onclick=()=>{state.index=i; highlight(); openPage(c.start);};
+    $('chapters').appendChild(b);
+  });
+  highlight();
+}
+function highlight(){
+  [...$('chapters').children].forEach((b,i)=>b.classList.toggle('active',i===state.index));
+}
+async function openChapter(i){
+  if(!state.pdf||!state.chapters[i]) return;
+  state.index=i;
+  highlight();
+  await openPage(state.chapters[i].start);
+}
+
+
+$('prevPage').onclick=()=>{ if(state.pdf) openPage(state.currentPage-1); };
+$('nextPage').onclick=()=>{ if(state.pdf) openPage(state.currentPage+1); };
+
+async function translateCurrentPage(targetLang){
+  if(!state.pageText){setStatus('Open a PDF page first.');return;}
+  try{
+    setStatus('Translating current page...');
+    const out=await gemini(`Translate the following text into ${targetLang}. Preserve technical meaning, names, numbers, equations, and structure. Return only the translation:\n\n${state.pageText}`);
+    $('text').textContent=out;
+    state.text=out;
+    state.chunks=segmentText(out);
+    state.chunk=0;
+    setStatus(`Page ${state.currentPage+1} translated to ${targetLang}.`);
+    updatePlayer();
+  }catch(e){
+    setStatus('Translation error: '+e.message);
+  }
+}
+$('translatePageEnPa').onclick=()=>translateCurrentPage('Punjabi (Gurmukhi)');
+$('translatePageEnHi').onclick=()=>translateCurrentPage('Hindi (Devanagari)');
+$('translatePagePaEn').onclick=()=>translateCurrentPage('English');
+
+$('prev').onclick=()=>{if(state.index>0)openChapter(state.index-1);};
+$('next').onclick=()=>{if(state.index<state.chapters.length-1)openChapter(state.index+1);};
+$('back').onclick=()=>{
+  stopSpeech(false); state.chunk=Math.max(0,state.chunk-1); updatePlayer();
+};
+$('forward').onclick=()=>{
+  stopSpeech(false); state.chunk=Math.min(Math.max(0,state.chunks.length-1),state.chunk+1); updatePlayer();
+};
+$('stop').onclick=()=>stopSpeech(true);
+
+$('play').onclick=()=>{
+  if(!state.chunks.length) return;
+  if(state.paused){
+    speechSynthesis.resume(); state.paused=false; state.playing=true; updatePlayer(); return;
+  }
+  if(state.playing){
+    speechSynthesis.pause(); state.paused=true; updatePlayer(); return;
+  }
+  state.playing=true; state.paused=false; updatePlayer(); speakCurrent();
+};
+function speakCurrent(){
+  if(!state.playing||state.paused) return;
+  if(state.chunk>=state.chunks.length){
+    state.playing=false; state.paused=false; state.chunk=Math.max(0,state.chunks.length-1); updatePlayer(); return;
+  }
+  const u=new SpeechSynthesisUtterance(state.chunks[state.chunk]);
+  const voice=state.voices[Number($('voice').value)];
+  if(voice) u.voice=voice;
+  u.rate=Number($('rate').value)||1;
+  state.utterance=u; updatePlayer();
+  u.onend=()=>{
+    if(!state.playing||state.paused) return;
+    state.chunk++;
+    updatePlayer();
+    speakCurrent();
+  };
+  u.onerror=e=>{
+    console.error(e);
+    state.playing=false; state.paused=false; updatePlayer();
+  };
+  speechSynthesis.speak(u);
+}
+
+// Selection tracking
+document.addEventListener('selectionchange',()=>{
+  const sel=window.getSelection();
+  if(!sel||sel.isCollapsed) return;
+  const txt=sel.toString().trim();
+  if(txt && $('text').contains(sel.anchorNode)) state.selectedText=txt;
+});
+
+
+// Voice translator
+$('translatorBtn').onclick=()=>showModal('translatorModal');
+$('closeTranslator').onclick=()=>hideModal('translatorModal');
+
+function languageName(tag){
+  return {'en-US':'English','pa-IN':'Punjabi (Gurmukhi)','hi-IN':'Hindi'}[tag]||tag;
+}
+function bestVoiceFor(lang){
+  const exact=state.voices.find(v=>v.lang.toLowerCase()===lang.toLowerCase());
+  if(exact) return exact;
+  const base=lang.split('-')[0].toLowerCase();
+  return state.voices.find(v=>v.lang.toLowerCase().startsWith(base)) || null;
+}
+async function translateVoiceInput(){
+  const text=$('voiceInput').value.trim();
+  if(!text){$('voiceStatus').textContent='Speak or type some text first.';return;}
+  const target=$('voiceTo').value;
+  $('voiceStatus').textContent='Translating...';
+  $('voiceOutput').value='';
+  try{
+    const out=await gemini(
+      `Translate the following ${languageName($('voiceFrom').value)} text into ${languageName(target)}. `+
+      `Preserve names, numbers, technical terms, and meaning. Return only the translation:\n\n${text}`
+    );
+    $('voiceOutput').value=out;
+    $('voiceStatus').textContent='Translation ready.';
+  }catch(e){
+    $('voiceStatus').textContent='Translation error: '+e.message;
+  }
+}
+$('translateVoiceText').onclick=translateVoiceInput;
+
+$('startListening').onclick=()=>{
+  const Recognition=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!Recognition){
+    $('voiceStatus').textContent='Speech recognition is not supported in this browser. Type the text instead.';
+    return;
+  }
+  try{
+    if(state.recognition) state.recognition.abort();
+    const r=new Recognition();
+    state.recognition=r;
+    r.lang=$('voiceFrom').value;
+    r.interimResults=false;
+    r.maxAlternatives=1;
+    $('voiceStatus').textContent='Listening... speak now.';
+    r.onresult=async e=>{
+      const text=e.results?.[0]?.[0]?.transcript||'';
+      $('voiceInput').value=text;
+      $('voiceStatus').textContent='Speech recognized. Translating...';
+      await translateVoiceInput();
+    };
+    r.onerror=e=>{
+      $('voiceStatus').textContent=
+        e.error==='language-not-supported'
+        ? 'This browser does not support microphone recognition for that language. You can still type the text and translate it.'
+        : 'Speech recognition error: '+e.error;
+    };
+    r.onend=()=>{state.recognition=null;};
+    r.start();
+  }catch(e){
+    $('voiceStatus').textContent='Could not start microphone: '+e.message;
+  }
+};
+
+$('speakTranslated').onclick=()=>{
+  const t=$('voiceOutput').value.trim();
+  if(!t){$('voiceStatus').textContent='Translate something first.';return;}
+  speechSynthesis.cancel();
+  const lang=$('voiceTo').value;
+  const u=new SpeechSynthesisUtterance(t);
+  u.lang=lang;
+  const v=bestVoiceFor(lang);
+  if(v) u.voice=v;
+  u.rate=Number($('rate').value)||1;
+  speechSynthesis.speak(u);
+  $('voiceStatus').textContent=v
+    ? `Speaking with ${v.name}.`
+    : `Speaking with the browser's available ${languageName(lang)} voice/fallback.`;
+};
+
+// AI settings
+$('settingsBtn').onclick=()=>{ $('apiKey').value=sessionStorage.getItem('pdfNarratorGeminiKey')||''; showModal('settingsModal'); };
+$('closeSettings').onclick=()=>hideModal('settingsModal');
+$('saveKey').onclick=()=>{
+  const k=$('apiKey').value.trim();
+  if(k){sessionStorage.setItem('pdfNarratorGeminiKey',k); hideModal('settingsModal');}
+};
+$('forgetKey').onclick=()=>{sessionStorage.removeItem('pdfNarratorGeminiKey');$('apiKey').value='';};
+
+$('aiBtn').onclick=()=>showModal('aiModal');
+$('closeAi').onclick=()=>hideModal('aiModal');
+$('readAi').onclick=()=>{
+  const t=$('aiOutput').value.trim(); if(!t)return;
+  speechSynthesis.cancel();
+  const u=new SpeechSynthesisUtterance(t);
+  const voice=state.voices[Number($('voice').value)];
+  if(voice)u.voice=voice; u.rate=Number($('rate').value)||1;
+  speechSynthesis.speak(u);
+};
+
+async function gemini(promptText){
+  const key=sessionStorage.getItem('pdfNarratorGeminiKey');
+  if(!key){hideModal('aiModal');showModal('settingsModal');throw new Error('Please add your Gemini API key in Settings first.');}
+
+  // Valid Google Gemini API models to try in order
+  const models = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'];
+  let lastErr = null;
+
+  for(const model of models){
+    try {
+      const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': key
+        },
+        body: JSON.stringify({ contents: [{ parts: [{ text: promptText }] }] })
+      });
+
+      const d = await r.json();
+
+      if (r.ok && !d.error && d?.candidates?.[0]?.content?.parts) {
+        const out = d.candidates[0].content.parts.map(x => x.text || '').join('').trim();
+        if (out) return out;
+      }
+
+      if (d?.error) {
+        const msg = d.error.message || '';
+        const code = d.error.code;
+        const status = d.error.status;
+
+        // Invalid API Key - stop immediately
+        if (code === 400 && (msg.includes('API key') || status === 'INVALID_ARGUMENT')) {
+          throw new Error(`Invalid Gemini API Key: ${msg}`);
+        }
+
+        if (code === 429 || status === 'RESOURCE_EXHAUSTED' || msg.includes('RESOURCE_EXHAUSTED') || msg.includes('Quota')) {
+          lastErr = `Quota Limit Reached (429): Your free Gemini API key limit for ${model} was reached. Please enter another key in Settings (get a free key at aistudio.google.com) or wait a short while for your quota to reset.`;
+        } else {
+          lastErr = msg || `HTTP ${r.status}`;
+        }
+      }
+    } catch(e) {
+      if (e.message.startsWith('Invalid Gemini API Key')) throw e;
+      lastErr = e.message;
+    }
+  }
+
+  throw new Error(lastErr || 'Unable to connect to Gemini API models.');
+}
+function aiSource(){
+  const selected=state.selectedText?.trim();
+  if(selected) return selected.slice(0,30000);
+  return state.text.slice(0,30000);
+}
+function promptFor(action,text){
+  if(action==='simple') return `Explain the following text in very simple language. Keep important technical meaning, define jargon, and use short paragraphs:\n\n${text}`;
+  if(action==='summary') return `Summarize the following text accurately. Give the main idea, important details, and conclusions. Do not invent facts:\n\n${text}`;
+  if(action==='vocab') return `Identify the important technical or difficult terms in the following text. For each, give a short plain-language definition and explain how it is used in this passage:\n\n${text}`;
+  if(action==='translate') return `Translate the following text into ${$('language').value}. Preserve technical meaning, names, numbers, equations, and structure. Return only the translation:\n\n${text}`;
+  return `Explain the following text clearly and accurately. State what it means, why it matters, and explain technical concepts step by step without inventing information:\n\n${text}`;
+}
+document.querySelectorAll('.aiAction').forEach(btn=>btn.onclick=async()=>{
+  const action=btn.dataset.ai;
+  $('translateOptions').classList.toggle('hidden',action!=='translate');
+  const src=aiSource();
+  if(!src){$('aiStatus').textContent='Upload a PDF or select text first.';return;}
+  $('aiStatus').textContent='Working...'; $('aiOutput').value='';
+  try{
+    const out=await gemini(promptFor(action,src));
+    $('aiOutput').value=out; $('aiStatus').textContent='Done.';
+  }catch(e){$('aiStatus').textContent=e.message;}
+});
+</script>
+</body>
+</html>
